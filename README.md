@@ -29,11 +29,11 @@ const client = createUmamiClient({
 
 // 获取页面访问统计
 const stats = await client.getPageStats('/about');
-console.log(`页面浏览量: ${stats.pageviews}, 访客数: ${stats.visitors}`);
+console.log(`页面浏览量: ${stats.pageviews}, 访客数: ${stats.visitors}, 访问次数: ${stats.visits}`);
 
 // 获取网站整体统计
 const siteStats = await client.getSiteStats();
-console.log(`总浏览量: ${siteStats.pageviews}, 总访客数: ${siteStats.visitors}`);
+console.log(`总浏览量: ${siteStats.pageviews}, 总访客数: ${siteStats.visitors}, 总访问次数: ${siteStats.visits}`);
 ```
 
 ### Astro 集成
@@ -47,10 +47,7 @@ import { umami } from 'oddmisc';
 export default defineConfig({
   integrations: [
     umami({
-      shareUrl: 'https://your-umami-instance.com/share/your-share-id',
-      timezone: 'Asia/Shanghai',
-      enableCache: true,
-      cacheTTL: 3600000 // 1小时
+      shareUrl: 'https://your-umami-instance.com/share/your-share-id'
     })
   ]
 });
@@ -76,18 +73,15 @@ const client = createUmamiClient(config);
 #### 配置选项
 ```javascript
 const config = {
-  shareUrl: 'https://umami.example.com/share/abc123', // 必需
-  timezone: 'Asia/Shanghai',  // 可选，默认 'Asia/Shanghai'
-  enableCache: true,          // 可选，默认 true
-  cacheTTL: 3600000           // 可选，默认 1小时(毫秒)
+  shareUrl: 'https://umami.example.com/share/abc123' // 必需
 };
 ```
 
 #### 方法
 
-- `getPageStats(path, options)` - 获取指定页面统计
-- `getPageStatsByUrl(url, options)` - 通过 URL 获取页面统计
-- `getSiteStats(options)` - 获取网站整体统计
+- `getPageStats(path)` - 获取指定页面统计
+- `getPageStatsByUrl(url)` - 通过 URL 获取页面统计
+- `getSiteStats()` - 获取网站整体统计
 - `clearCache()` - 清除缓存
 - `getConfig()` - 获取当前配置
 - `updateConfig(newConfig)` - 更新配置
@@ -101,10 +95,7 @@ umami(options: UmamiIntegrationOptions)
 选项：
 ```javascript
 interface UmamiIntegrationOptions {
-  shareUrl: string;      // Umami 分享链接
-  timezone?: string;     // 时区，默认 'Asia/Shanghai'
-  enableCache?: boolean; // 启用缓存，默认 true
-  cacheTTL?: number;     // 缓存时间，单位毫秒
+  shareUrl: string;  // Umami 分享链接
 }
 ```
 
