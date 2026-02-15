@@ -181,7 +181,8 @@ class UmamiRuntimeClient {
     
     const result: StatsResult = {
       pageviews: data.pageviews?.value ?? data.pageviews ?? 0,
-      visitors: data.visitors?.value ?? data.visitors ?? 0
+      visitors: data.visitors?.value ?? data.visitors ?? 0,
+      visits: data.visits?.value ?? data.visits ?? 0
     };
 
     this.cache.set(cacheKey, result);
