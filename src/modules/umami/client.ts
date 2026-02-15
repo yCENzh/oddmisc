@@ -106,9 +106,3 @@ export class UmamiClient {
 export function createUmamiClient(config: UmamiConfig): UmamiClient {
   return new UmamiClient(config);
 }
-
-// 兼容旧版本
-if (typeof window !== 'undefined') {
-  (window as any).UmamiClient = UmamiClient;
-  (window as any).createUmamiClient = createUmamiClient;
-}
