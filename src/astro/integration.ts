@@ -45,7 +45,7 @@ ${runtimeCode}
 
 // 初始化
 if (typeof window !== 'undefined') {
-  initUmamiRuntime(${JSON.stringify(config)});
+  __oddmiscRuntime.initUmamiRuntime(${JSON.stringify(config)});
 }
 `;
 
