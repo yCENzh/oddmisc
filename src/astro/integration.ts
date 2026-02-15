@@ -1,3 +1,7 @@
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+
 // Astro 集成配置
 export interface UmamiIntegrationOptions {
   shareUrl: string;      // Umami 分享链接
@@ -9,11 +13,11 @@ export interface UmamiIntegrationOptions {
 // Astro 集成函数
 export function umami(options: UmamiIntegrationOptions) {
   if (!options.shareUrl) {
-    throw new Error('需要配置 shareUrl');
+    throw new Error('[oddmisc] 需要配置 shareUrl');
   }
 
   return {
-    name: 'astro-umami-integration',
+    name: 'oddmisc-umami-integration',
     hooks: {
       'astro:config:setup': ({ injectScript }: any) => {
         const config = {
@@ -23,18 +27,29 @@ export function umami(options: UmamiIntegrationOptions) {
           cacheTTL: options.cacheTTL || 3600000
         };
 
-        // 注入全局统计客户端
-        injectScript('page', `
-          import { createUmamiClient } from 'oddmisc';
-          
-          // 创建命名空间避免冲突
-          window.oddmisc = window.oddmisc || {};
-          window.oddmisc.umami = createUmamiClient(${JSON.stringify(config)});
-          
-          // 命名空间下的快捷方法
-          window.oddmisc.getStats = (path) => window.oddmisc.umami.getPageStats(path);
-          window.oddmisc.getSiteStats = () => window.oddmisc.umami.getSiteStats();
-        `);
+        // 读取运行时代码
+        let runtimeCode = '';
+        try {
+          const __dirname = dirname(fileURLToPath(import.meta.url));
+          const runtimePath = join(__dirname, '../runtime/client.js');
+          runtimeCode = readFileSync(runtimePath, 'utf-8');
+        } catch {
+          // 如果读取失败，使用内联代码
+          console.warn('[oddmisc] 无法读取运行时文件，使用备用方案');
+        }
+
+        // 注入运行时 + 初始化配置
+        const initCode = `
+// oddmisc Umami Runtime
+${runtimeCode}
+
+// 初始化
+if (typeof window !== 'undefined') {
+  initUmamiRuntime(${JSON.stringify(config)});
+}
+`;
+
+        injectScript('page', initCode);
       }
     }
   };
