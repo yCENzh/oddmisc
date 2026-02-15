@@ -18,7 +18,7 @@ export class UmamiClient {
     const { apiBase, shareId } = parseShareUrl(config.shareUrl);
     
     this.config = {
-      timezone: 'Asia/Shanghai',
+      timezone: 'Asia/Hong_Kong',
       enableCache: true,
       cacheTTL: 3600000,
       baseUrl: apiBase,

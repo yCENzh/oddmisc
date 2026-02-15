@@ -41,7 +41,7 @@ export class UmamiAPI {
       startAt: '0',
       endAt: Date.now().toString(),
       unit: 'hour',
-      timezone: params.timezone || 'Asia/Shanghai',
+      timezone: params.timezone || 'Asia/Hong_Kong',
       compare: 'false',
       ...params
     });

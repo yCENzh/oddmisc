@@ -40,8 +40,9 @@ function parseShareUrl(shareUrl: string): { apiBase: string; shareId: string } {
     throw new Error('无效的分享 ID');
   }
   
-  // 把 /share/ 替换成 /api 得到 API 基础路径
-  const apiPath = url.pathname.replace('/share/', '/api');
+  // 构造 apiBase：去掉 /share/{shareId}，加上 /api
+  const pathBeforeShare = pathParts.slice(0, shareIndex).join('/');
+  const apiPath = pathBeforeShare + '/api';
   const apiBase = `${url.protocol}//${url.host}${apiPath}`;
   
   return { apiBase, shareId };
@@ -124,7 +125,7 @@ class UmamiRuntimeClient {
     const { apiBase, shareId } = parseShareUrl(config.shareUrl);
     this.apiBase = apiBase;
     this.shareId = shareId;
-    this.timezone = config.timezone || 'Asia/Shanghai';
+    this.timezone = config.timezone || 'Asia/Hong_Kong';
     
     if (config.enableCache !== false) {
       this.cache = new SimpleCache(

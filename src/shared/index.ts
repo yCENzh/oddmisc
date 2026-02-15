@@ -3,7 +3,7 @@ export const VERSION = '1.0.0';
 
 // 默认配置
 export const DEFAULT_CONFIG = {
-  timezone: 'Asia/Shanghai',
+  timezone: 'Asia/Hong_Kong',
   enableCache: true,
   cacheTTL: 3600000
 } as const;
