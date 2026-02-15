@@ -7,9 +7,6 @@
 
 interface UmamiRuntimeConfig {
   shareUrl: string;
-  timezone?: string;
-  enableCache?: boolean;
-  cacheTTL?: number;
 }
 
 interface StatsResult {
@@ -116,8 +113,7 @@ class SimpleCache {
 class UmamiRuntimeClient {
   private apiBase: string;
   private shareId: string;
-  private timezone: string;
-  private cache: SimpleCache | null;
+  private cache: SimpleCache;
   private shareData: ShareData | null = null;
   private sharePromise: Promise<ShareData> | null = null;
 
@@ -125,16 +121,7 @@ class UmamiRuntimeClient {
     const { apiBase, shareId } = parseShareUrl(config.shareUrl);
     this.apiBase = apiBase;
     this.shareId = shareId;
-    this.timezone = config.timezone || 'Asia/Hong_Kong';
-    
-    if (config.enableCache !== false) {
-      this.cache = new SimpleCache(
-        `umami-runtime-${shareId}`,
-        config.cacheTTL || 3600000
-      );
-    } else {
-      this.cache = null;
-    }
+    this.cache = new SimpleCache(`umami-runtime-${shareId}`, 3600000);
   }
 
   private async getShareData(): Promise<ShareData> {
@@ -163,22 +150,16 @@ class UmamiRuntimeClient {
   async getStats(path?: string): Promise<StatsResult> {
     const cacheKey = path ? `stats-${path}` : 'stats-site';
     
-    // 检查缓存
-    if (this.cache) {
-      const cached = this.cache.get(cacheKey);
-      if (cached) {
-        return { ...cached, _fromCache: true };
-      }
+    const cached = this.cache.get(cacheKey);
+    if (cached) {
+      return { ...cached, _fromCache: true };
     }
 
     const { websiteId, token } = await this.getShareData();
     
     const params = new URLSearchParams({
       startAt: '0',
-      endAt: Date.now().toString(),
-      unit: 'hour',
-      timezone: this.timezone,
-      compare: 'false'
+      endAt: Date.now().toString()
     });
 
     if (path) {
@@ -203,10 +184,7 @@ class UmamiRuntimeClient {
       visitors: data.visitors?.value ?? data.visitors ?? 0
     };
 
-    // 缓存结果
-    if (this.cache) {
-      this.cache.set(cacheKey, result);
-    }
+    this.cache.set(cacheKey, result);
 
     return result;
   }
@@ -220,9 +198,7 @@ class UmamiRuntimeClient {
   }
 
   clearCache(): void {
-    if (this.cache) {
-      this.cache.clear();
-    }
+    this.cache.clear();
     this.shareData = null;
     this.sharePromise = null;
   }
@@ -232,13 +208,8 @@ class UmamiRuntimeClient {
 export function initUmamiRuntime(config: UmamiRuntimeConfig): void {
   const client = new UmamiRuntimeClient(config);
   
-  // 创建命名空间
   (window as any).oddmisc = (window as any).oddmisc || {};
-  
-  // 挂载客户端实例
   (window as any).oddmisc.umami = client;
-  
-  // 快捷方法
   (window as any).oddmisc.getStats = (path?: string) => client.getStats(path);
   (window as any).oddmisc.getSiteStats = () => client.getSiteStats();
   (window as any).oddmisc.getPageStats = (path: string) => client.getPageStats(path);
@@ -247,5 +218,4 @@ export function initUmamiRuntime(config: UmamiRuntimeConfig): void {
   console.log('[oddmisc] Umami runtime client initialized');
 }
 
-// 导出类型
 export type { UmamiRuntimeConfig, StatsResult };

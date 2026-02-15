@@ -9,24 +9,19 @@ export class UmamiClient {
   private api: UmamiAPI;
 
   constructor(config: UmamiConfig) {
-    // 验证必需参数
     if (!config.shareUrl) {
       throw new Error('shareUrl 是必需参数');
     }
     
-    // 自动解析 shareUrl
     const { apiBase, shareId } = parseShareUrl(config.shareUrl);
     
     this.config = {
-      timezone: 'Asia/Hong_Kong',
-      enableCache: true,
-      cacheTTL: 3600000,
       baseUrl: apiBase,
       shareId,
       ...config
     };
     
-    this.cacheManager = new CacheManager('umami', this.config.cacheTTL);
+    this.cacheManager = new CacheManager('umami', 3600000);
     this.api = new UmamiAPI(this.cacheManager);
   }
 
@@ -40,7 +35,6 @@ export class UmamiClient {
     
     const data = await this.api.getStats(this.config.baseUrl, this.config.shareId, {
       path: `eq.${path}`,
-      timezone: this.config.timezone,
       ...options
     });
     
@@ -61,7 +55,6 @@ export class UmamiClient {
     
     const data = await this.api.getStats(this.config.baseUrl, this.config.shareId, {
       url: url,
-      timezone: this.config.timezone,
       ...options
     });
     
@@ -77,10 +70,7 @@ export class UmamiClient {
       throw new Error('客户端未正确初始化');
     }
     
-    const data = await this.api.getStats(this.config.baseUrl, this.config.shareId, {
-      timezone: this.config.timezone,
-      ...options
-    });
+    const data = await this.api.getStats(this.config.baseUrl, this.config.shareId, options);
     
     return {
       pageviews: data.pageviews || 0,
