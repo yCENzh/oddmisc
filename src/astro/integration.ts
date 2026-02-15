@@ -31,7 +31,7 @@ export function umami(options: UmamiIntegrationOptions) {
         let runtimeCode = '';
         try {
           const __dirname = dirname(fileURLToPath(import.meta.url));
-          const runtimePath = join(__dirname, '../runtime/client.global.js');
+          const runtimePath = join(__dirname, './runtime/client.global.js');
           runtimeCode = readFileSync(runtimePath, 'utf-8');
         } catch {
           // 如果读取失败，使用内联代码
