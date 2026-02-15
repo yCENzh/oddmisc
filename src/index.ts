@@ -1,5 +1,5 @@
 // 核心导出
-export { VERSION, DEFAULT_CONFIG, isValidConfig, UmamiError } from './shared';
+export { VERSION, isValidConfig, UmamiError } from './shared';
 
 // Umami 模块
 export { UmamiClient, createUmamiClient } from './modules/umami/client';

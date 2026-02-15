@@ -39,12 +39,13 @@ export class UmamiAPI {
     
     const queryParams = new URLSearchParams({
       startAt: '0',
-      endAt: Date.now().toString(),
-      unit: 'hour',
-      timezone: params.timezone || 'Asia/Hong_Kong',
-      compare: 'false',
-      ...params
+      endAt: Date.now().toString()
     });
+
+    // 添加可选的 path 参数
+    if (params.path) {
+      queryParams.set('path', params.path);
+    }
 
     const statsUrl = `${baseUrl}/websites/${websiteId}/stats?${queryParams.toString()}`;
     

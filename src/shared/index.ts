@@ -1,13 +1,6 @@
 // 版本信息
 export const VERSION = '1.0.0';
 
-// 默认配置
-export const DEFAULT_CONFIG = {
-  timezone: 'Asia/Hong_Kong',
-  enableCache: true,
-  cacheTTL: 3600000
-} as const;
-
 // 配置验证
 export function isValidConfig(config: any): boolean {
   return (

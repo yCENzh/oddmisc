@@ -4,10 +4,7 @@ import { dirname, join } from 'path';
 
 // Astro 集成配置
 export interface UmamiIntegrationOptions {
-  shareUrl: string;      // Umami 分享链接
-  timezone?: string;     // 时区，默认 'Asia/Hong_Kong'
-  enableCache?: boolean; // 启用缓存，默认 true
-  cacheTTL?: number;     // 缓存时间，单位毫秒
+  shareUrl: string;  // Umami 分享链接
 }
 
 // Astro 集成函数
@@ -20,13 +17,6 @@ export function umami(options: UmamiIntegrationOptions) {
     name: 'oddmisc-umami-integration',
     hooks: {
       'astro:config:setup': ({ injectScript }: any) => {
-        const config = {
-          shareUrl: options.shareUrl,
-          timezone: options.timezone || 'Asia/Hong_Kong',
-          enableCache: options.enableCache !== false,
-          cacheTTL: options.cacheTTL || 3600000
-        };
-
         // 读取运行时代码
         let runtimeCode = '';
         try {
@@ -34,7 +24,6 @@ export function umami(options: UmamiIntegrationOptions) {
           const runtimePath = join(__dirname, './runtime/client.global.js');
           runtimeCode = readFileSync(runtimePath, 'utf-8');
         } catch {
-          // 如果读取失败，使用内联代码
           console.warn('[oddmisc] 无法读取运行时文件，使用备用方案');
         }
 
@@ -45,7 +34,7 @@ ${runtimeCode}
 
 // 初始化
 if (typeof window !== 'undefined') {
-  __oddmiscRuntime.initUmamiRuntime(${JSON.stringify(config)});
+  __oddmiscRuntime.initUmamiRuntime(${JSON.stringify({ shareUrl: options.shareUrl })});
 }
 `;
 
