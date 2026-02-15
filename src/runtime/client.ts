@@ -25,9 +25,8 @@ interface ShareData {
 }
 
 // 解析分享 URL
-function parseShareUrl(shareUrl: string): { baseUrl: string; shareId: string } {
+function parseShareUrl(shareUrl: string): { apiBase: string; shareId: string } {
   const url = new URL(shareUrl);
-  const baseUrl = `${url.protocol}//${url.host}`;
   const pathParts = url.pathname.split('/');
   const shareIndex = pathParts.indexOf('share');
   
@@ -41,7 +40,11 @@ function parseShareUrl(shareUrl: string): { baseUrl: string; shareId: string } {
     throw new Error('无效的分享 ID');
   }
   
-  return { baseUrl, shareId };
+  // 把 /share/ 替换成 /api 得到 API 基础路径
+  const apiPath = url.pathname.replace('/share/', '/api');
+  const apiBase = `${url.protocol}//${url.host}${apiPath}`;
+  
+  return { apiBase, shareId };
 }
 
 // 简单的缓存管理
@@ -110,7 +113,7 @@ class SimpleCache {
 
 // Umami 运行时客户端
 class UmamiRuntimeClient {
-  private baseUrl: string;
+  private apiBase: string;
   private shareId: string;
   private timezone: string;
   private cache: SimpleCache | null;
@@ -118,8 +121,8 @@ class UmamiRuntimeClient {
   private sharePromise: Promise<ShareData> | null = null;
 
   constructor(config: UmamiRuntimeConfig) {
-    const { baseUrl, shareId } = parseShareUrl(config.shareUrl);
-    this.baseUrl = baseUrl;
+    const { apiBase, shareId } = parseShareUrl(config.shareUrl);
+    this.apiBase = apiBase;
     this.shareId = shareId;
     this.timezone = config.timezone || 'Asia/Shanghai';
     
@@ -143,7 +146,7 @@ class UmamiRuntimeClient {
     }
 
     this.sharePromise = (async (): Promise<ShareData> => {
-      const res = await fetch(`${this.baseUrl}/api/share/${this.shareId}`);
+      const res = await fetch(`${this.apiBase}/share/${this.shareId}`);
       if (!res.ok) {
         this.sharePromise = null;
         throw new Error(`获取分享信息失败: ${res.status}`);
@@ -182,7 +185,7 @@ class UmamiRuntimeClient {
     }
 
     const res = await fetch(
-      `${this.baseUrl}/api/websites/${websiteId}/stats?${params.toString()}`,
+      `${this.apiBase}/websites/${websiteId}/stats?${params.toString()}`,
       {
         headers: { 'x-umami-share-token': token }
       }

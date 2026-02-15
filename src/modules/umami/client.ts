@@ -15,13 +15,13 @@ export class UmamiClient {
     }
     
     // 自动解析 shareUrl
-    const { baseUrl, shareId } = parseShareUrl(config.shareUrl);
+    const { apiBase, shareId } = parseShareUrl(config.shareUrl);
     
     this.config = {
       timezone: 'Asia/Shanghai',
       enableCache: true,
       cacheTTL: 3600000,
-      baseUrl,
+      baseUrl: apiBase,
       shareId,
       ...config
     };

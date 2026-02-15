@@ -20,7 +20,7 @@ export class UmamiAPI {
   }
 
   private async fetchShareData(baseUrl: string, shareId: string): Promise<ShareData> {
-    const res = await fetch(`${baseUrl}/api/share/${shareId}`);
+    const res = await fetch(`${baseUrl}/share/${shareId}`);
     if (!res.ok) {
       throw new Error(`获取分享信息失败: ${res.status} ${res.statusText}`);
     }
@@ -46,7 +46,7 @@ export class UmamiAPI {
       ...params
     });
 
-    const statsUrl = `${baseUrl}/api/websites/${websiteId}/stats?${queryParams.toString()}`;
+    const statsUrl = `${baseUrl}/websites/${websiteId}/stats?${queryParams.toString()}`;
     
     const res = await fetch(statsUrl, {
       headers: { 'x-umami-share-token': token }
