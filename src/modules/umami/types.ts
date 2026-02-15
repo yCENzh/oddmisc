@@ -1,7 +1,7 @@
 export interface UmamiConfig {
   /** 分享 URL，如: https://umami.example.com/share/abc123 */
   shareUrl: string;
-  /** 时区，默认 'Asia/Shanghai' */
+  /** 时区，默认 'Asia/Hong_Kong' */
   timezone?: string;
   /** 是否启用缓存，默认 true */
   enableCache?: boolean;

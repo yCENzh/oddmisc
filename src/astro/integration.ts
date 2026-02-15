@@ -5,7 +5,7 @@ import { dirname, join } from 'path';
 // Astro 集成配置
 export interface UmamiIntegrationOptions {
   shareUrl: string;      // Umami 分享链接
-  timezone?: string;     // 时区，默认 'Asia/Shanghai'
+  timezone?: string;     // 时区，默认 'Asia/Hong_Kong'
   enableCache?: boolean; // 启用缓存，默认 true
   cacheTTL?: number;     // 缓存时间，单位毫秒
 }
@@ -22,7 +22,7 @@ export function umami(options: UmamiIntegrationOptions) {
       'astro:config:setup': ({ injectScript }: any) => {
         const config = {
           shareUrl: options.shareUrl,
-          timezone: options.timezone || 'Asia/Shanghai',
+          timezone: options.timezone || 'Asia/Hong_Kong',
           enableCache: options.enableCache !== false,
           cacheTTL: options.cacheTTL || 3600000
         };

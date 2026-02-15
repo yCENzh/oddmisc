@@ -22,9 +22,10 @@ export function parseShareUrl(shareUrl: string): { apiBase: string; shareId: str
       throw new Error('无效的分享 ID');
     }
     
-    // 把 /share/ 替换成 /api 得到 API 基础路径
-    // 例如: /analytics/us/share/ → /analytics/us/api
-    const apiPath = url.pathname.replace('/share/', '/api');
+    // 构造 apiBase：去掉 /share/{shareId}，加上 /api
+    // 例如: /analytics/us/share/abc123 → /analytics/us/api
+    const pathBeforeShare = pathParts.slice(0, shareIndex).join('/');
+    const apiPath = pathBeforeShare + '/api';
     const apiBase = `${url.protocol}//${url.host}${apiPath}`;
     
     return { apiBase, shareId };
