@@ -53,6 +53,14 @@ export default defineConfig({
 });
 ```
 
+**禁用 umami：**
+
+```javascript
+umami({
+  shareUrl: false  // 设为 false 则跳过 umami 集成
+})
+```
+
 然后在前端代码中使用：
 
 ```javascript
@@ -95,7 +103,7 @@ umami(options: UmamiIntegrationOptions)
 选项：
 ```javascript
 interface UmamiIntegrationOptions {
-  shareUrl: string;  // Umami 分享链接
+  shareUrl: string | false;  // Umami 分享链接，设为 false 则跳过
 }
 ```
 

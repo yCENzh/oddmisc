@@ -6,7 +6,7 @@
  */
 
 interface UmamiRuntimeConfig {
-  shareUrl: string;
+  shareUrl: string | false;
 }
 
 interface StatsResult {
@@ -33,8 +33,8 @@ function parseShareUrl(shareUrl: string): { apiBase: string; shareId: string } {
   
   const shareId = pathParts[shareIndex + 1];
   
-  if (!shareId || shareId.length < 10) {
-    throw new Error('无效的分享 ID');
+  if (!shareId) {
+    throw new Error('无效的分享 URL：缺少分享 ID');
   }
   
   // 构造 apiBase：去掉 /share/{shareId}，加上 /api
@@ -118,7 +118,7 @@ class UmamiRuntimeClient {
   private sharePromise: Promise<ShareData> | null = null;
 
   constructor(config: UmamiRuntimeConfig) {
-    const { apiBase, shareId } = parseShareUrl(config.shareUrl);
+    const { apiBase, shareId } = parseShareUrl(config.shareUrl as string);
     this.apiBase = apiBase;
     this.shareId = shareId;
     this.cache = new SimpleCache(`umami-runtime-${shareId}`, 3600000);
@@ -205,18 +205,40 @@ class UmamiRuntimeClient {
   }
 }
 
-// 初始化函数 - 挂载到 window.oddmisc
+// 空客户端，用于禁用或出错时兜底
+function mountEmptyClient(): void {
+  (window as any).oddmisc = {
+    getStats: () => Promise.resolve({ pageviews: 0, visitors: 0, visits: 0 }),
+    getSiteStats: () => Promise.resolve({ pageviews: 0, visitors: 0, visits: 0 }),
+    getPageStats: () => Promise.resolve({ pageviews: 0, visitors: 0, visits: 0 }),
+    clearCache: () => {},
+  };
+}
+
+// 初始化
 export function initUmamiRuntime(config: UmamiRuntimeConfig): void {
-  const client = new UmamiRuntimeClient(config);
-  
-  (window as any).oddmisc = (window as any).oddmisc || {};
-  (window as any).oddmisc.umami = client;
-  (window as any).oddmisc.getStats = (path?: string) => client.getStats(path);
-  (window as any).oddmisc.getSiteStats = () => client.getSiteStats();
-  (window as any).oddmisc.getPageStats = (path: string) => client.getPageStats(path);
-  (window as any).oddmisc.clearCache = () => client.clearCache();
-  
-  console.log('[oddmisc] Umami runtime client initialized');
+  // shareUrl 为 false 时跳过
+  if (!config.shareUrl) {
+    console.log('[oddmisc] shareUrl 未配置，跳过初始化');
+    mountEmptyClient();
+    return;
+  }
+
+  try {
+    const client = new UmamiRuntimeClient(config);
+    
+    (window as any).oddmisc = (window as any).oddmisc || {};
+    (window as any).oddmisc.umami = client;
+    (window as any).oddmisc.getStats = (path?: string) => client.getStats(path);
+    (window as any).oddmisc.getSiteStats = () => client.getSiteStats();
+    (window as any).oddmisc.getPageStats = (path: string) => client.getPageStats(path);
+    (window as any).oddmisc.clearCache = () => client.clearCache();
+    
+    console.log('[oddmisc] Umami runtime client initialized');
+  } catch (error) {
+    console.warn('[oddmisc] 初始化失败:', error instanceof Error ? error.message : error);
+    mountEmptyClient();
+  }
 }
 
 export type { UmamiRuntimeConfig, StatsResult };
