@@ -1,7 +1,5 @@
 /**
  * 浏览器运行时客户端
- * 用于 Astro 集成注入到页面中
- * 
  * 注意：此文件会被内联注入到页面，不能有外部依赖
  */
 
@@ -21,31 +19,39 @@ interface ShareData {
   token: string;
 }
 
-// 解析分享 URL
+const DEFAULT_TIMEOUT = 10000;
+
+async function fetchWithTimeout(url: string, options?: RequestInit, timeout = DEFAULT_TIMEOUT): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 function parseShareUrl(shareUrl: string): { apiBase: string; shareId: string } {
   const url = new URL(shareUrl);
   const pathParts = url.pathname.split('/');
   const shareIndex = pathParts.indexOf('share');
-  
+
   if (shareIndex === -1 || shareIndex === pathParts.length - 1) {
     throw new Error('无效的分享 URL：未找到 share 路径');
   }
-  
+
   const shareId = pathParts[shareIndex + 1];
-  
+
   if (!shareId) {
     throw new Error('无效的分享 URL：缺少分享 ID');
   }
-  
-  // 构造 apiBase：去掉 /share/{shareId}，加上 /api
+
   const pathBeforeShare = pathParts.slice(0, shareIndex).join('/');
-  const apiPath = pathBeforeShare + '/api';
-  const apiBase = `${url.protocol}//${url.host}${apiPath}`;
-  
+  const apiBase = `${url.protocol}//${url.host}${pathBeforeShare}/api`;
+
   return { apiBase, shareId };
 }
 
-// 简单的缓存管理
 class SimpleCache {
   private cache = new Map<string, { value: any; timestamp: number }>();
   private storageKey: string;
@@ -69,9 +75,7 @@ class SimpleCache {
           }
         }
       }
-    } catch {
-      // ignore
-    }
+    } catch {}
   }
 
   private saveToStorage(): void {
@@ -81,15 +85,20 @@ class SimpleCache {
         obj[key] = value;
       });
       localStorage.setItem(this.storageKey, JSON.stringify(obj));
-    } catch {
-      // ignore
-    }
+    } catch {}
+  }
+
+  private isExpired(timestamp: number): boolean {
+    return Date.now() - timestamp >= this.ttl;
   }
 
   get(key: string): any | null {
     const cached = this.cache.get(key);
-    if (cached && Date.now() - cached.timestamp < this.ttl) {
+    if (cached && !this.isExpired(cached.timestamp)) {
       return cached.value;
+    }
+    if (cached) {
+      this.cache.delete(key);
     }
     return null;
   }
@@ -103,13 +112,10 @@ class SimpleCache {
     this.cache.clear();
     try {
       localStorage.removeItem(this.storageKey);
-    } catch {
-      // ignore
-    }
+    } catch {}
   }
 }
 
-// Umami 运行时客户端
 class UmamiRuntimeClient {
   private apiBase: string;
   private shareId: string;
@@ -134,7 +140,7 @@ class UmamiRuntimeClient {
     }
 
     this.sharePromise = (async (): Promise<ShareData> => {
-      const res = await fetch(`${this.apiBase}/share/${this.shareId}`);
+      const res = await fetchWithTimeout(`${this.apiBase}/share/${this.shareId}`);
       if (!res.ok) {
         this.sharePromise = null;
         throw new Error(`获取分享信息失败: ${res.status}`);
@@ -149,14 +155,14 @@ class UmamiRuntimeClient {
 
   async getStats(path?: string): Promise<StatsResult> {
     const cacheKey = path ? `stats-${path}` : 'stats-site';
-    
+
     const cached = this.cache.get(cacheKey);
     if (cached) {
       return { ...cached, _fromCache: true };
     }
 
     const { websiteId, token } = await this.getShareData();
-    
+
     const params = new URLSearchParams({
       startAt: '0',
       endAt: Date.now().toString()
@@ -166,7 +172,7 @@ class UmamiRuntimeClient {
       params.set('path', `eq.${path}`);
     }
 
-    const res = await fetch(
+    const res = await fetchWithTimeout(
       `${this.apiBase}/websites/${websiteId}/stats?${params.toString()}`,
       {
         headers: { 'x-umami-share-token': token }
@@ -178,7 +184,7 @@ class UmamiRuntimeClient {
     }
 
     const data = await res.json();
-    
+
     const result: StatsResult = {
       pageviews: data.pageviews?.value ?? data.pageviews ?? 0,
       visitors: data.visitors?.value ?? data.visitors ?? 0,
@@ -205,7 +211,6 @@ class UmamiRuntimeClient {
   }
 }
 
-// 空客户端，用于禁用或出错时兜底
 function mountEmptyClient(): void {
   (window as any).oddmisc = {
     getStats: () => Promise.resolve({ pageviews: 0, visitors: 0, visits: 0 }),
@@ -215,9 +220,7 @@ function mountEmptyClient(): void {
   };
 }
 
-// 初始化
 export function initUmamiRuntime(config: UmamiRuntimeConfig): void {
-  // shareUrl 为 false 时跳过
   if (!config.shareUrl) {
     console.log('[oddmisc] shareUrl 未配置，跳过初始化');
     mountEmptyClient();
@@ -226,14 +229,14 @@ export function initUmamiRuntime(config: UmamiRuntimeConfig): void {
 
   try {
     const client = new UmamiRuntimeClient(config);
-    
+
     (window as any).oddmisc = (window as any).oddmisc || {};
     (window as any).oddmisc.umami = client;
     (window as any).oddmisc.getStats = (path?: string) => client.getStats(path);
     (window as any).oddmisc.getSiteStats = () => client.getSiteStats();
     (window as any).oddmisc.getPageStats = (path: string) => client.getPageStats(path);
     (window as any).oddmisc.clearCache = () => client.clearCache();
-    
+
     console.log('[oddmisc] Umami runtime client initialized');
   } catch (error) {
     console.warn('[oddmisc] 初始化失败:', error instanceof Error ? error.message : error);

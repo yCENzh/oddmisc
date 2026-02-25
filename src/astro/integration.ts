@@ -2,12 +2,12 @@ import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 
-export interface UmamiIntegrationOptions {
-  shareUrl: string | false;  // 设为 false 则跳过
+interface UmamiIntegrationOptions {
+  /** 设为 false 则跳过集成 */
+  shareUrl: string | false;
 }
 
 export function umami(options: UmamiIntegrationOptions) {
-  // shareUrl 为 false 时跳过
   if (!options.shareUrl) {
     return {
       name: 'oddmisc-umami-integration',
@@ -32,7 +32,6 @@ export function umami(options: UmamiIntegrationOptions) {
 // oddmisc Umami Runtime
 ${runtimeCode}
 
-// 初始化
 if (typeof window !== 'undefined') {
   __oddmiscRuntime.initUmamiRuntime(${JSON.stringify({ shareUrl: options.shareUrl })});
 }
@@ -43,3 +42,5 @@ if (typeof window !== 'undefined') {
     }
   };
 }
+
+export type { UmamiIntegrationOptions };

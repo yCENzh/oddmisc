@@ -1,5 +1,22 @@
-import type { ShareData } from './types';
+import type { ShareData, StatsQueryParams } from './types';
 import { CacheManager } from '../../utils/umami/cache';
+
+interface StatsAPIParams extends Partial<StatsQueryParams> {
+  path?: string;
+  url?: string;
+}
+
+const DEFAULT_TIMEOUT = 10000;
+
+async function fetchWithTimeout(url: string, options?: RequestInit, timeout = DEFAULT_TIMEOUT): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
 
 export class UmamiAPI {
   private cacheManager: CacheManager;
@@ -20,36 +37,35 @@ export class UmamiAPI {
   }
 
   private async fetchShareData(baseUrl: string, shareId: string): Promise<ShareData> {
-    const res = await fetch(`${baseUrl}/share/${shareId}`);
+    const res = await fetchWithTimeout(`${baseUrl}/share/${shareId}`);
     if (!res.ok) {
       throw new Error(`获取分享信息失败: ${res.status} ${res.statusText}`);
     }
     return res.json();
   }
 
-  async getStats(baseUrl: string, shareId: string, params: any) {
+  async getStats(baseUrl: string, shareId: string, params: StatsAPIParams) {
     const cacheKey = `${baseUrl}|${shareId}|${JSON.stringify(params)}`;
-    
+
     const cached = this.cacheManager.get(cacheKey);
     if (cached) {
       return { ...cached, _fromCache: true };
     }
 
     const { websiteId, token } = await this.getShareData(baseUrl, shareId);
-    
+
     const queryParams = new URLSearchParams({
       startAt: '0',
       endAt: Date.now().toString()
     });
 
-    // 添加可选的 path 参数
     if (params.path) {
       queryParams.set('path', params.path);
     }
 
     const statsUrl = `${baseUrl}/websites/${websiteId}/stats?${queryParams.toString()}`;
-    
-    const res = await fetch(statsUrl, {
+
+    const res = await fetchWithTimeout(statsUrl, {
       headers: { 'x-umami-share-token': token }
     });
 
