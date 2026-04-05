@@ -1,3 +1,3 @@
 // Astro 集成入口
-export { umami } from './integration';
-export type { UmamiIntegrationOptions } from './integration';
+export { umami, oddmisc } from './integration';
+export type { UmamiIntegrationOptions, OddmiscIntegrationOptions } from './integration';

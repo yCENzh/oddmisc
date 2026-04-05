@@ -1,21 +1,19 @@
 import type { ShareData, StatsQueryParams } from './types';
 import { CacheManager } from '../../utils/umami/cache';
+import { fetchWithTimeout } from '../../utils/fetch';
+import { UmamiNetworkError, UmamiAuthError } from '../../errors';
 
 interface StatsAPIParams extends Partial<StatsQueryParams> {
   path?: string;
   url?: string;
 }
 
-const DEFAULT_TIMEOUT = 10000;
-
-async function fetchWithTimeout(url: string, options?: RequestInit, timeout = DEFAULT_TIMEOUT): Promise<Response> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeout);
-  try {
-    return await fetch(url, { ...options, signal: controller.signal });
-  } finally {
-    clearTimeout(timeoutId);
-  }
+interface StatsAPIResponse {
+  pageviews?: number | { value: number };
+  visitors?: number | { value: number };
+  visits?: number | { value: number };
+  _fromCache?: boolean;
+  [key: string]: unknown;
 }
 
 export class UmamiAPI {
@@ -39,12 +37,12 @@ export class UmamiAPI {
   private async fetchShareData(baseUrl: string, shareId: string): Promise<ShareData> {
     const res = await fetchWithTimeout(`${baseUrl}/share/${shareId}`);
     if (!res.ok) {
-      throw new Error(`获取分享信息失败: ${res.status} ${res.statusText}`);
+      throw new UmamiNetworkError(`获取分享信息失败: ${res.status}`, res.status);
     }
     return res.json();
   }
 
-  async getStats(baseUrl: string, shareId: string, params: StatsAPIParams) {
+  async getStats(baseUrl: string, shareId: string, params: StatsAPIParams): Promise<StatsAPIResponse> {
     const cacheKey = `${baseUrl}|${shareId}|${JSON.stringify(params)}`;
 
     const cached = this.cacheManager.get(cacheKey);
@@ -72,9 +70,9 @@ export class UmamiAPI {
     if (!res.ok) {
       if (res.status === 401) {
         this.cacheManager.clear();
-        throw new Error('认证失败，请检查 shareId');
+        throw new UmamiAuthError('认证失败，请检查 shareId', res.status);
       }
-      throw new Error(`获取统计失败: ${res.status} ${res.statusText}`);
+      throw new UmamiNetworkError(`获取统计失败: ${res.status}`, res.status);
     }
 
     const data = await res.json();

@@ -3,6 +3,18 @@
  * 注意：此文件会被内联注入到页面，不能有外部依赖
  */
 
+const DEFAULT_TIMEOUT = 10000;
+
+async function fetchWithTimeout(url: string, options?: RequestInit, timeout = DEFAULT_TIMEOUT): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 interface UmamiRuntimeConfig {
   shareUrl: string | false;
 }
@@ -17,18 +29,6 @@ interface StatsResult {
 interface ShareData {
   websiteId: string;
   token: string;
-}
-
-const DEFAULT_TIMEOUT = 10000;
-
-async function fetchWithTimeout(url: string, options?: RequestInit, timeout = DEFAULT_TIMEOUT): Promise<Response> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeout);
-  try {
-    return await fetch(url, { ...options, signal: controller.signal });
-  } finally {
-    clearTimeout(timeoutId);
-  }
 }
 
 function parseShareUrl(shareUrl: string): { apiBase: string; shareId: string } {
@@ -53,9 +53,10 @@ function parseShareUrl(shareUrl: string): { apiBase: string; shareId: string } {
 }
 
 class SimpleCache {
-  private cache = new Map<string, { value: any; timestamp: number }>();
+  private cache = new Map<string, { value: unknown; timestamp: number }>();
   private storageKey: string;
   private ttl: number;
+  private storageCache: Record<string, { value: unknown; timestamp: number }> | null = null;
 
   constructor(storageKey: string, ttl: number) {
     this.storageKey = storageKey;
@@ -64,27 +65,23 @@ class SimpleCache {
   }
 
   private loadFromStorage(): void {
+    if (this.storageCache !== null) return;
     try {
       const stored = localStorage.getItem(this.storageKey);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        const now = Date.now();
-        for (const [key, data] of Object.entries(parsed)) {
-          if (now - (data as any).timestamp < this.ttl) {
-            this.cache.set(key, data as { value: any; timestamp: number });
-          }
-        }
-      }
-    } catch {}
+      this.storageCache = stored ? JSON.parse(stored) : {};
+    } catch {
+      this.storageCache = {};
+    }
   }
 
   private saveToStorage(): void {
     try {
-      const obj: Record<string, any> = {};
+      const obj: Record<string, { value: unknown; timestamp: number }> = {};
       this.cache.forEach((value, key) => {
         obj[key] = value;
       });
       localStorage.setItem(this.storageKey, JSON.stringify(obj));
+      this.storageCache = obj;
     } catch {}
   }
 
@@ -92,7 +89,7 @@ class SimpleCache {
     return Date.now() - timestamp >= this.ttl;
   }
 
-  get(key: string): any | null {
+  get(key: string): unknown | null {
     const cached = this.cache.get(key);
     if (cached && !this.isExpired(cached.timestamp)) {
       return cached.value;
@@ -103,13 +100,15 @@ class SimpleCache {
     return null;
   }
 
-  set(key: string, value: any): void {
-    this.cache.set(key, { value, timestamp: Date.now() });
+  set(key: string, value: unknown): void {
+    const entry = { value, timestamp: Date.now() };
+    this.cache.set(key, entry);
     this.saveToStorage();
   }
 
   clear(): void {
     this.cache.clear();
+    this.storageCache = null;
     try {
       localStorage.removeItem(this.storageKey);
     } catch {}
@@ -124,7 +123,10 @@ class UmamiRuntimeClient {
   private sharePromise: Promise<ShareData> | null = null;
 
   constructor(config: UmamiRuntimeConfig) {
-    const { apiBase, shareId } = parseShareUrl(config.shareUrl as string);
+    if (!config.shareUrl) {
+      throw new Error('shareUrl 是必需参数');
+    }
+    const { apiBase, shareId } = parseShareUrl(config.shareUrl);
     this.apiBase = apiBase;
     this.shareId = shareId;
     this.cache = new SimpleCache(`umami-runtime-${shareId}`, 3600000);
@@ -158,7 +160,7 @@ class UmamiRuntimeClient {
 
     const cached = this.cache.get(cacheKey);
     if (cached) {
-      return { ...cached, _fromCache: true };
+      return { ...cached as StatsResult, _fromCache: true };
     }
 
     const { websiteId, token } = await this.getShareData();
@@ -212,7 +214,7 @@ class UmamiRuntimeClient {
 }
 
 function mountEmptyClient(): void {
-  (window as any).oddmisc = {
+  (window as typeof window & { oddmisc?: Record<string, unknown> }).oddmisc = {
     getStats: () => Promise.resolve({ pageviews: 0, visitors: 0, visits: 0 }),
     getSiteStats: () => Promise.resolve({ pageviews: 0, visitors: 0, visits: 0 }),
     getPageStats: () => Promise.resolve({ pageviews: 0, visitors: 0, visits: 0 }),
@@ -224,24 +226,43 @@ export function initUmamiRuntime(config: UmamiRuntimeConfig): void {
   if (!config.shareUrl) {
     console.log('[oddmisc] shareUrl 未配置，跳过初始化');
     mountEmptyClient();
-    return;
+  } else {
+    try {
+      const client = new UmamiRuntimeClient(config);
+
+      (window as typeof window & { oddmisc?: Record<string, unknown> }).oddmisc = {
+        umami: client,
+        getStats: (path?: string) => client.getStats(path),
+        getSiteStats: () => client.getSiteStats(),
+        getPageStats: (path: string) => client.getPageStats(path),
+        clearCache: () => client.clearCache(),
+      };
+
+      console.log('[oddmisc] Umami runtime client initialized');
+    } catch (error) {
+      console.warn('[oddmisc] 初始化失败:', error instanceof Error ? error.message : error);
+      mountEmptyClient();
+    }
   }
 
-  try {
-    const client = new UmamiRuntimeClient(config);
-
-    (window as any).oddmisc = (window as any).oddmisc || {};
-    (window as any).oddmisc.umami = client;
-    (window as any).oddmisc.getStats = (path?: string) => client.getStats(path);
-    (window as any).oddmisc.getSiteStats = () => client.getSiteStats();
-    (window as any).oddmisc.getPageStats = (path: string) => client.getPageStats(path);
-    (window as any).oddmisc.clearCache = () => client.clearCache();
-
-    console.log('[oddmisc] Umami runtime client initialized');
-  } catch (error) {
-    console.warn('[oddmisc] 初始化失败:', error instanceof Error ? error.message : error);
-    mountEmptyClient();
-  }
+  window.dispatchEvent(
+    new CustomEvent('oddmisc-ready', {
+      detail: { client: (window as typeof window & { oddmisc?: Record<string, unknown> }).oddmisc }
+    })
+  );
 }
 
 export type { UmamiRuntimeConfig, StatsResult };
+
+interface OddmiscReadyEvent extends CustomEvent {
+  detail: {
+    client: {
+      getStats: (path?: string) => Promise<StatsResult>;
+      getSiteStats: () => Promise<StatsResult>;
+      getPageStats: (path: string) => Promise<StatsResult>;
+      clearCache: () => void;
+    };
+  };
+}
+
+export type { OddmiscReadyEvent };

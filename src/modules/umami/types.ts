@@ -1,8 +1,6 @@
 interface UmamiConfig {
   /** 如: https://umami.example.com/share/abc123 */
   shareUrl: string;
-  baseUrl?: string;
-  shareId?: string;
 }
 
 interface StatsQueryParams {
@@ -13,6 +11,7 @@ interface StatsQueryParams {
 interface StatsResult {
   pageviews: number;
   visitors: number;
+  visits?: number;
   _fromCache?: boolean;
 }
 

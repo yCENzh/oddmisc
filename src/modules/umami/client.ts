@@ -3,8 +3,14 @@ import { UmamiAPI } from './api';
 import { parseShareUrl } from '../../utils/umami/url-parser';
 import type { UmamiConfig, StatsResult, StatsQueryParams } from './types';
 
+function extractValue(field: number | { value: number } | undefined): number {
+  if (typeof field === 'number') return field;
+  return field?.value ?? 0;
+}
+
 export class UmamiClient {
-  private config: UmamiConfig;
+  private baseUrl: string;
+  private shareId: string;
   private cacheManager: CacheManager;
   private api: UmamiAPI;
 
@@ -14,12 +20,8 @@ export class UmamiClient {
     }
 
     const { apiBase, shareId } = parseShareUrl(config.shareUrl);
-
-    this.config = {
-      baseUrl: apiBase,
-      shareId,
-      ...config
-    };
+    this.baseUrl = apiBase;
+    this.shareId = shareId;
 
     this.cacheManager = new CacheManager('umami', 3600000);
     this.api = new UmamiAPI(this.cacheManager);
@@ -29,18 +31,15 @@ export class UmamiClient {
     path: string,
     options: Partial<StatsQueryParams> = {}
   ): Promise<StatsResult> {
-    if (!this.config.baseUrl || !this.config.shareId) {
-      throw new Error('客户端未正确初始化');
-    }
-
-    const data = await this.api.getStats(this.config.baseUrl, this.config.shareId, {
+    const data = await this.api.getStats(this.baseUrl, this.shareId, {
       path: `eq.${path}`,
       ...options
     });
 
     return {
-      pageviews: (data.pageviews?.value) || data.pageviews || 0,
-      visitors: (data.visitors?.value) || data.visitors || 0,
+      pageviews: extractValue(data.pageviews),
+      visitors: extractValue(data.visitors),
+      visits: extractValue(data.visits),
       _fromCache: data._fromCache
     };
   }
@@ -49,32 +48,26 @@ export class UmamiClient {
     url: string,
     options: Partial<StatsQueryParams> = {}
   ): Promise<StatsResult> {
-    if (!this.config.baseUrl || !this.config.shareId) {
-      throw new Error('客户端未正确初始化');
-    }
-
-    const data = await this.api.getStats(this.config.baseUrl, this.config.shareId, {
-      url: url,
+    const data = await this.api.getStats(this.baseUrl, this.shareId, {
+      url,
       ...options
     });
 
     return {
-      pageviews: (data.pageviews?.value) || data.pageviews || 0,
-      visitors: (data.visitors?.value) || data.visitors || 0,
+      pageviews: extractValue(data.pageviews),
+      visitors: extractValue(data.visitors),
+      visits: extractValue(data.visits),
       _fromCache: data._fromCache
     };
   }
 
   async getSiteStats(options: Partial<StatsQueryParams> = {}): Promise<StatsResult> {
-    if (!this.config.baseUrl || !this.config.shareId) {
-      throw new Error('客户端未正确初始化');
-    }
-
-    const data = await this.api.getStats(this.config.baseUrl, this.config.shareId, options);
+    const data = await this.api.getStats(this.baseUrl, this.shareId, options);
 
     return {
-      pageviews: data.pageviews || 0,
-      visitors: data.visitors || 0,
+      pageviews: extractValue(data.pageviews),
+      visitors: extractValue(data.visitors),
+      visits: extractValue(data.visits),
       _fromCache: data._fromCache
     };
   }
@@ -82,14 +75,6 @@ export class UmamiClient {
   clearCache(): void {
     this.cacheManager.clear();
     this.api.clearShareCache();
-  }
-
-  getConfig(): Readonly<UmamiConfig> {
-    return { ...this.config };
-  }
-
-  updateConfig(newConfig: Partial<UmamiConfig>): void {
-    this.config = { ...this.config, ...newConfig };
   }
 }
 

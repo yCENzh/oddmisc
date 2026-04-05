@@ -2,16 +2,41 @@ const isBrowser = typeof window !== 'undefined' && typeof localStorage !== 'unde
 
 export class CacheManager<T = any> {
   private memoryCache = new Map<string, { value: T; timestamp: number }>();
-  private readonly CACHE_KEY: string;
-  private readonly DEFAULT_TTL: number;
+  private readonly cacheKey: string;
+  private readonly ttl: number;
+  private storageCache: Record<string, { value: T; timestamp: number }> | null = null;
 
   constructor(namespace = 'default', ttl = 3600000) {
-    this.CACHE_KEY = `cache-${namespace}`;
-    this.DEFAULT_TTL = ttl;
+    this.cacheKey = `cache-${namespace}`;
+    this.ttl = ttl;
+  }
+
+  private loadStorage(): Record<string, { value: T; timestamp: number }> {
+    if (this.storageCache !== null) {
+      return this.storageCache;
+    }
+    if (!isBrowser) {
+      this.storageCache = {};
+    } else {
+      try {
+        const cached = localStorage.getItem(this.cacheKey);
+        this.storageCache = cached ? JSON.parse(cached) : {};
+      } catch {
+        this.storageCache = {};
+      }
+    }
+    return this.storageCache!;
+  }
+
+  private saveStorage(): void {
+    if (!isBrowser || this.storageCache === null) return;
+    try {
+      localStorage.setItem(this.cacheKey, JSON.stringify(this.storageCache));
+    } catch {}
   }
 
   private isExpired(timestamp: number): boolean {
-    return Date.now() - timestamp >= this.DEFAULT_TTL;
+    return Date.now() - timestamp >= this.ttl;
   }
 
   get(key: string): T | null {
@@ -23,18 +48,15 @@ export class CacheManager<T = any> {
       this.memoryCache.delete(key);
     }
 
-    if (isBrowser) {
-      try {
-        const cached = localStorage.getItem(this.CACHE_KEY);
-        if (cached) {
-          const parsed = JSON.parse(cached);
-          const cachedData = parsed[key];
-          if (cachedData && !this.isExpired(cachedData.timestamp)) {
-            this.memoryCache.set(key, cachedData);
-            return cachedData.value;
-          }
-        }
-      } catch {}
+    const storage = this.loadStorage();
+    const stored = storage[key];
+    if (stored && !this.isExpired(stored.timestamp)) {
+      this.memoryCache.set(key, stored);
+      return stored.value;
+    }
+    if (stored) {
+      delete storage[key];
+      this.saveStorage();
     }
 
     return null;
@@ -42,38 +64,30 @@ export class CacheManager<T = any> {
 
   set(key: string, value: T): void {
     const timestamp = Date.now();
-    this.memoryCache.set(key, { value, timestamp });
+    const entry = { value, timestamp };
+    this.memoryCache.set(key, entry);
 
-    if (isBrowser) {
-      try {
-        const cached = localStorage.getItem(this.CACHE_KEY);
-        const cacheObj = cached ? JSON.parse(cached) : {};
-        cacheObj[key] = { timestamp, value };
-        localStorage.setItem(this.CACHE_KEY, JSON.stringify(cacheObj));
-      } catch {}
-    }
+    const storage = this.loadStorage();
+    storage[key] = entry;
+    this.saveStorage();
   }
 
   clear(): void {
     this.memoryCache.clear();
+    this.storageCache = null;
     if (isBrowser) {
       try {
-        localStorage.removeItem(this.CACHE_KEY);
+        localStorage.removeItem(this.cacheKey);
       } catch {}
     }
   }
 
   delete(key: string): void {
     this.memoryCache.delete(key);
-    if (isBrowser) {
-      try {
-        const cached = localStorage.getItem(this.CACHE_KEY);
-        if (cached) {
-          const cacheObj = JSON.parse(cached);
-          delete cacheObj[key];
-          localStorage.setItem(this.CACHE_KEY, JSON.stringify(cacheObj));
-        }
-      } catch {}
+    const storage = this.loadStorage();
+    if (key in storage) {
+      delete storage[key];
+      this.saveStorage();
     }
   }
 }

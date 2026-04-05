@@ -1,6 +1,6 @@
 {
   "name": "oddmisc",
-  "version": "1.1.5",
+  "version": "1.1.6",
   "description": "杂七杂八奇怪小工具 npm 包",
   "homepage": "https://github.com/yCENzh/oddmisc#readme",
   "bugs": {
@@ -24,6 +24,11 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
+    },
+    "./astro": {
+      "types": "./dist/astro/index.d.ts",
+      "import": "./dist/astro/index.js",
+      "require": "./dist/astro/index.cjs"
     }
   },
   "files": [
@@ -34,7 +39,9 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "prepublishOnly": "pnpm build",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "keywords": [
     "umami",
@@ -47,7 +54,10 @@
   ],
   "devDependencies": {
     "@types/node": "^25.2.3",
+    "@vitest/coverage-v8": "^4.1.2",
+    "astro": "^6.1.3",
     "tsup": "^8.5.1",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.2"
   }
 }
