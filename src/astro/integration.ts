@@ -14,7 +14,7 @@ export interface OddmiscIntegrationOptions {
 
 type AstroConfigSetupParams = HookParameters<'astro:config:setup'>;
 
-function injectUmamiRuntime(shareUrl: string | false) {
+function injectUmamiRuntime(shareUrl: string | false): string | undefined {
   if (!shareUrl) return;
 
   let runtimeCode = '';
@@ -23,19 +23,18 @@ function injectUmamiRuntime(shareUrl: string | false) {
     const runtimePath = join(__dirname, './runtime/client.global.js');
     runtimeCode = readFileSync(runtimePath, 'utf-8');
   } catch {
-    console.warn('[oddmisc] 无法读取运行时文件，使用备用方案');
+    console.warn('[oddmisc] 无法读取运行时文件，已跳过客户端注入');
+    return;
   }
 
-  const initCode = `
+  return `
 // oddmisc Umami Runtime
 ${runtimeCode}
 
-if (typeof window !== 'undefined') {
+if (typeof window !== 'undefined' && typeof __oddmiscRuntime !== 'undefined') {
   __oddmiscRuntime.initUmamiRuntime(${JSON.stringify({ shareUrl })});
 }
 `;
-
-  return initCode;
 }
 
 export function umami(options: UmamiIntegrationOptions): AstroIntegration {

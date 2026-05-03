@@ -6,7 +6,18 @@ export { UmamiError, UmamiUrlError, UmamiAuthError, UmamiNetworkError } from './
 
 // Umami 模块
 export { UmamiClient, createUmamiClient } from './modules/umami/client';
-export type { UmamiConfig, StatsResult, StatsQueryParams } from './modules/umami/types';
+export type {
+  UmamiConfig,
+  StatsResult,
+  StatsQueryParams,
+  StatsComparison,
+  MetricType,
+  MetricEntry,
+  PageviewPoint,
+  PageviewsSeries,
+  WebsiteInfo,
+  DateRange
+} from './modules/umami/types';
 
 // 工具函数
 export { CacheManager } from './utils/umami/cache';

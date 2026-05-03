@@ -1,6 +1,6 @@
 const isBrowser = typeof window !== 'undefined' && typeof localStorage !== 'undefined';
 
-export class CacheManager<T = any> {
+export class CacheManager<T = unknown> {
   private memoryCache = new Map<string, { value: T; timestamp: number }>();
   private readonly cacheKey: string;
   private readonly ttl: number;
