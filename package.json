@@ -1,7 +1,7 @@
 {
   "name": "oddmisc",
   "version": "1.1.6",
-  "description": "杂七杂八奇怪小工具 npm 包",
+  "description": "杂七杂八奇怪小工具 npm 包 — Umami 分享链接统计读取与 Astro 集成",
   "homepage": "https://github.com/yCENzh/oddmisc#readme",
   "bugs": {
     "url": "https://github.com/yCENzh/oddmisc/issues"
