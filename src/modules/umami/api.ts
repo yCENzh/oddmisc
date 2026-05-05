@@ -18,6 +18,7 @@ const SHARE_CONTEXT_VALUE = '1';
 
 interface StatsAPIParams extends Partial<StatsQueryParams> {
   path?: string;
+  hostname?: string;
   url?: string;
 }
 
@@ -121,16 +122,28 @@ export class UmamiAPI {
     });
   }
 
+  private buildRangeCacheQuery(range: TimeRange = {}): URLSearchParams {
+    const qp = new URLSearchParams();
+    if (typeof range.startAt === 'number') qp.set('startAt', range.startAt.toString());
+    if (typeof range.endAt === 'number') qp.set('endAt', range.endAt.toString());
+    return qp;
+  }
+
   async getStats(baseUrl: string, shareId: string, params: StatsAPIParams): Promise<StatsAPIResponse> {
     const { websiteId } = await this.getShareData(baseUrl, shareId);
     const qp = this.buildRangeQuery(params);
+    const cacheQp = this.buildRangeCacheQuery(params);
     if (params.path) qp.set('path', params.path);
     if (params.url) qp.set('url', params.url);
+    if (params.hostname) qp.set('hostname', params.hostname);
+    if (params.path) cacheQp.set('path', params.path);
+    if (params.url) cacheQp.set('url', params.url);
+    if (params.hostname) cacheQp.set('hostname', params.hostname);
     return this.cachedGet<StatsAPIResponse>(
       baseUrl,
       shareId,
       `/websites/${websiteId}/stats?${qp.toString()}`,
-      `${baseUrl}|${shareId}|stats|${qp.toString()}`
+      `${baseUrl}|${shareId}|stats|${cacheQp.toString()}`
     );
   }
 
@@ -167,13 +180,16 @@ export class UmamiAPI {
   ): Promise<Cached<PageviewsSeries>> {
     const { websiteId } = await this.getShareData(baseUrl, shareId);
     const qp = this.buildRangeQuery(params);
+    const cacheQp = this.buildRangeCacheQuery(params);
     qp.set('unit', params.unit ?? 'day');
     qp.set('timezone', params.timezone ?? 'UTC');
+    cacheQp.set('unit', params.unit ?? 'day');
+    cacheQp.set('timezone', params.timezone ?? 'UTC');
     return this.cachedGet<PageviewsSeries>(
       baseUrl,
       shareId,
       `/websites/${websiteId}/pageviews?${qp.toString()}`,
-      `${baseUrl}|${shareId}|pageviews|${qp.toString()}`
+      `${baseUrl}|${shareId}|pageviews|${cacheQp.toString()}`
     );
   }
 
@@ -185,9 +201,12 @@ export class UmamiAPI {
   ): Promise<MetricEntry[]> {
     const { websiteId } = await this.getShareData(baseUrl, shareId);
     const qp = this.buildRangeQuery(params);
+    const cacheQp = this.buildRangeCacheQuery(params);
     qp.set('type', type);
     if (typeof params.limit === 'number') qp.set('limit', params.limit.toString());
-    const cacheKey = `${baseUrl}|${shareId}|metrics|${qp.toString()}`;
+    cacheQp.set('type', type);
+    if (typeof params.limit === 'number') cacheQp.set('limit', params.limit.toString());
+    const cacheKey = `${baseUrl}|${shareId}|metrics|${cacheQp.toString()}`;
 
     // CacheManager 只能存对象，数组包一层再缓存
     const cached = this.cacheManager.get(cacheKey) as { data: MetricEntry[] } | null;

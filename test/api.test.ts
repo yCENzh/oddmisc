@@ -58,7 +58,21 @@ describe('UmamiAPI.getStats', () => {
     expect(statsCall).toContain('url=https%3A%2F%2Fsite.example%2Fpage');
   });
 
+  it('forwards the hostname query parameter to the stats endpoint', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ websiteId: 'w1', token: 't1' }) } as unknown as Response)
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ pageviews: 0, visitors: 0, visits: 0 }) } as unknown as Response);
+    globalThis.fetch = fetchMock as unknown as typeof fetch;
+
+    await api.getStats(BASE, SHARE_ID, { hostname: 'eq.site.example' });
+
+    const statsCall = fetchMock.mock.calls[1][0] as string;
+    expect(statsCall).toContain('hostname=eq.site.example');
+  });
+
   it('returns cached response on the second call without calling fetch again', async () => {
+    let now = 1000;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
     const fetchMock = vi.fn()
       .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ websiteId: 'w1', token: 't1' }) } as unknown as Response)
       .mockResolvedValueOnce({ ok: true, status: 200, json: async () => ({ pageviews: 5, visitors: 6, visits: 7 }) } as unknown as Response);
@@ -67,6 +81,7 @@ describe('UmamiAPI.getStats', () => {
     const first = await api.getStats(BASE, SHARE_ID, { path: 'eq./a' });
     expect(first._fromCache).toBeUndefined();
 
+    now = 2000;
     const second = await api.getStats(BASE, SHARE_ID, { path: 'eq./a' });
     expect(second._fromCache).toBe(true);
     expect(fetchMock).toHaveBeenCalledTimes(2);
