@@ -92,7 +92,7 @@ export class UmamiAPI {
     if (!res.ok) {
       throw new UmamiNetworkError(`获取分享信息失败: ${res.status}`, res.status);
     }
-    return res.json();
+    return (await res.json()) as ShareData;
   }
 
   private async authedFetch<T>(baseUrl: string, shareId: string, path: string): Promise<T> {
@@ -127,34 +127,23 @@ export class UmamiAPI {
     return data;
   }
 
-  private buildRangeQuery(range: TimeRange = {}): URLSearchParams {
-    return new URLSearchParams({
-      startAt: (range.startAt ?? 0).toString(),
-      endAt: (range.endAt ?? this.alignedNow()).toString()
-    });
-  }
-
-  private buildRangeCacheQuery(range: TimeRange = {}): URLSearchParams {
-    const qp = new URLSearchParams();
-    qp.set('startAt', (range.startAt ?? 0).toString());
-    qp.set('endAt', (range.endAt ?? this.alignedNow()).toString());
-    return qp;
-  }
-
-  private alignedNow(): number {
-    return Math.floor(Date.now() / RANGE_ALIGN_MS) * RANGE_ALIGN_MS;
+  private resolveRange(range: TimeRange = {}): { startAt: number; endAt: number } {
+    return {
+      startAt: range.startAt ?? 0,
+      endAt: range.endAt ?? Math.floor(Date.now() / RANGE_ALIGN_MS) * RANGE_ALIGN_MS
+    };
   }
 
   async getStats(baseUrl: string, shareId: string, params: StatsAPIParams): Promise<StatsAPIResponse> {
     const { websiteId } = await this.getShareData(baseUrl, shareId);
-    const qp = this.buildRangeQuery(params);
-    const cacheQp = this.buildRangeCacheQuery(params);
+    const { startAt, endAt } = this.resolveRange(params);
+    const qp = new URLSearchParams({ startAt: startAt.toString(), endAt: endAt.toString() });
+    const cacheQp = new URLSearchParams({ startAt: startAt.toString(), endAt: endAt.toString() });
     if (params.path) { qp.set('path', params.path); cacheQp.set('path', params.path); }
     if (params.url) { qp.set('url', params.url); cacheQp.set('url', params.url); }
     if (params.hostname) { qp.set('hostname', params.hostname); cacheQp.set('hostname', params.hostname); }
     return this.cachedGet<StatsAPIResponse>(
-      baseUrl,
-      shareId,
+      baseUrl, shareId,
       `/websites/${websiteId}/stats?${qp.toString()}`,
       `${baseUrl}|${shareId}|stats|${cacheQp.toString()}`
     );
@@ -189,8 +178,9 @@ export class UmamiAPI {
     params: PageviewsParams = {}
   ): Promise<Cached<PageviewsSeries>> {
     const { websiteId } = await this.getShareData(baseUrl, shareId);
-    const qp = this.buildRangeQuery(params);
-    const cacheQp = this.buildRangeCacheQuery(params);
+    const { startAt, endAt } = this.resolveRange(params);
+    const qp = new URLSearchParams({ startAt: startAt.toString(), endAt: endAt.toString() });
+    const cacheQp = new URLSearchParams({ startAt: startAt.toString(), endAt: endAt.toString() });
     qp.set('unit', params.unit ?? 'day');
     qp.set('timezone', params.timezone ?? 'UTC');
     cacheQp.set('unit', params.unit ?? 'day');
@@ -207,10 +197,11 @@ export class UmamiAPI {
     shareId: string,
     type: MetricType,
     params: MetricsParams = {}
-  ): Promise<MetricEntry[]> {
+  ): Promise<Cached<MetricEntry[]>> {
     const { websiteId } = await this.getShareData(baseUrl, shareId);
-    const qp = this.buildRangeQuery(params);
-    const cacheQp = this.buildRangeCacheQuery(params);
+    const { startAt, endAt } = this.resolveRange(params);
+    const qp = new URLSearchParams({ startAt: startAt.toString(), endAt: endAt.toString() });
+    const cacheQp = new URLSearchParams({ startAt: startAt.toString(), endAt: endAt.toString() });
     qp.set('type', type);
     if (typeof params.limit === 'number') qp.set('limit', params.limit.toString());
     cacheQp.set('type', type);
@@ -218,7 +209,10 @@ export class UmamiAPI {
     const cacheKey = `${baseUrl}|${shareId}|metrics|${cacheQp.toString()}`;
 
     const cached = this.cacheManager.get(cacheKey) as { data: MetricEntry[] } | null;
-    if (cached) return cached.data;
+    if (cached) {
+      Object.defineProperty(cached.data, '_fromCache', { value: true, enumerable: false, writable: true });
+      return cached.data;
+    }
 
     const data = await this.authedFetch<MetricEntry[]>(
       baseUrl, shareId,

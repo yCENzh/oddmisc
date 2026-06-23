@@ -13,7 +13,7 @@ export default defineConfig([
     dts: true,
     splitting: false,
     sourcemap: true,
-    clean: true,
+    clean: false,
     minify: true,
     define: {
       PKG_VERSION: JSON.stringify(pkg.version)

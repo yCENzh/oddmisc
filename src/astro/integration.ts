@@ -4,7 +4,6 @@ import { dirname, join } from 'path';
 import type { AstroIntegration, HookParameters } from 'astro';
 
 export interface UmamiIntegrationOptions {
-  /** 设为 false 则跳过集成 */
   shareUrl: string | false;
 }
 
@@ -20,7 +19,8 @@ function injectUmamiRuntime(shareUrl: string | false): string | undefined {
   let runtimeCode = '';
   try {
     const __dirname = dirname(fileURLToPath(import.meta.url));
-    const runtimePath = join(__dirname, './runtime/client.global.js');
+    // dist/astro/ → dist/runtime/client.global.js
+    const runtimePath = join(__dirname, '../runtime/client.global.js');
     runtimeCode = readFileSync(runtimePath, 'utf-8');
   } catch {
     console.warn('[oddmisc] 无法读取运行时文件，已跳过客户端注入');

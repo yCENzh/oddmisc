@@ -6,6 +6,7 @@ const DEFAULT_TIMEOUT = 10000;
 const SHARE_CONTEXT_HEADER = 'x-umami-share-context';
 const SHARE_CONTEXT_VALUE = '1';
 const CACHE_TTL = 3600000;
+const CACHE_MAX = 100;
 const RANGE_ALIGN_MS = 5 * 60_000;
 
 // --- utils ---
@@ -15,6 +16,11 @@ async function fetchWithTimeout(url: string, options?: RequestInit, timeout = DE
   const timeoutId = setTimeout(() => controller.abort(), timeout);
   try {
     return await fetch(url, { ...options, signal: controller.signal });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new Error(`[oddmisc] 请求超时 (${timeout}ms): ${url}`);
+    }
+    throw err;
   } finally {
     clearTimeout(timeoutId);
   }
@@ -50,7 +56,7 @@ function alignedNow(): number {
 class SimpleCache {
   private cache = new Map<string, { value: unknown; timestamp: number }>();
 
-  constructor(private readonly storageKey: string, private readonly ttl: number) {
+  constructor(private readonly storageKey: string, private readonly ttl: number, private readonly maxEntries = CACHE_MAX) {
     this.loadFromStorage();
   }
 
@@ -72,13 +78,19 @@ class SimpleCache {
       const obj: Record<string, { value: unknown; timestamp: number }> = {};
       this.cache.forEach((v, k) => { obj[k] = v; });
       localStorage.setItem(this.storageKey, JSON.stringify(obj));
-    } catch (e) {
-      console.warn('[oddmisc] localStorage write failed:', e instanceof Error ? e.message : e);
-    }
+    } catch { /* ignore */ }
   }
 
   private isExpired(timestamp: number): boolean {
     return Date.now() - timestamp >= this.ttl;
+  }
+
+  private evictIfNeeded(): void {
+    if (this.cache.size <= this.maxEntries) return;
+    const entries = [...this.cache.entries()].sort((a, b) => a[1].timestamp - b[1].timestamp);
+    const toRemove = entries.length - this.maxEntries;
+    for (let i = 0; i < toRemove; i++) this.cache.delete(entries[i][0]);
+    this.saveToStorage();
   }
 
   get(key: string): unknown | null {
@@ -91,6 +103,7 @@ class SimpleCache {
   set(key: string, value: unknown): void {
     this.cache.set(key, { value, timestamp: Date.now() });
     this.saveToStorage();
+    this.evictIfNeeded();
   }
 
   clear(): void {
@@ -130,8 +143,12 @@ class UmamiRuntimeClient {
     if (this.sharePromise) return this.sharePromise;
     this.sharePromise = (async (): Promise<ShareData> => {
       const res = await fetchWithTimeout(`${this.apiBase}/share/${this.shareId}`);
-      if (!res.ok) { this.sharePromise = null; throw new Error(`获取分享信息失败: ${res.status}`); }
-      const data = await res.json();
+      if (!res.ok) {
+        this.shareData = null;
+        this.sharePromise = null;
+        throw new Error(`获取分享信息失败: ${res.status}`);
+      }
+      const data = (await res.json()) as ShareData;
       this.shareData = data;
       return data;
     })();
@@ -151,11 +168,12 @@ class UmamiRuntimeClient {
   }
 
   async getStats(path?: string): Promise<StatsResult> {
-    const cacheKey = path ? `stats-${path}` : 'stats-site';
+    const endAt = alignedNow();
+    const cacheKey = `${path ? `stats-${path}` : 'stats-site'}-${endAt}`;
     const cached = this.cache.get(cacheKey) as StatsResult | null;
     if (cached) return { ...cached, _fromCache: true };
 
-    const params = new URLSearchParams({ startAt: '0', endAt: alignedNow().toString() });
+    const params = new URLSearchParams({ startAt: '0', endAt: endAt.toString() });
     if (path) params.set('path', `eq.${path}`);
 
     const data = await this.authedFetch<Record<string, unknown>>(`/stats?${params.toString()}`);
