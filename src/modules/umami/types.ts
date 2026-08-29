@@ -69,11 +69,17 @@ interface WebsiteInfo {
   createdAt: string;
   updatedAt: string;
   resetAt: string | null;
+  userId: string;
+  teamId: string | null;
+  createdBy: string;
+  deletedAt: string | null;
+  recorderEnabled: boolean;
+  replayConfig: Record<string, unknown> | null;
 }
 
 interface DateRange {
-  startDate: string;
-  endDate: string;
+  startDate: string | null;
+  endDate: string | null;
 }
 
 export type {

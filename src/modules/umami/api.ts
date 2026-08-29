@@ -208,17 +208,17 @@ export class UmamiAPI {
     if (typeof params.limit === 'number') cacheQp.set('limit', params.limit.toString());
     const cacheKey = `${baseUrl}|${shareId}|metrics|${cacheQp.toString()}`;
 
-    const cached = this.cacheManager.get(cacheKey) as { data: MetricEntry[] } | null;
+    const cached = this.cacheManager.get(cacheKey) as MetricEntry[] | null;
     if (cached) {
-      Object.defineProperty(cached.data, '_fromCache', { value: true, enumerable: false, writable: true });
-      return cached.data;
+      Object.defineProperty(cached, '_fromCache', { value: true, enumerable: true, writable: true });
+      return cached;
     }
 
     const data = await this.authedFetch<MetricEntry[]>(
       baseUrl, shareId,
       `/websites/${websiteId}/metrics?${qp.toString()}`
     );
-    this.cacheManager.set(cacheKey, { data });
+    this.cacheManager.set(cacheKey, data);
     return data;
   }
 }

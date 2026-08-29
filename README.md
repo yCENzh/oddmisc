@@ -194,8 +194,8 @@ initUmamiRuntime({ shareUrl: 'https://.../share/<id>' });
 所有错误都继承自 `UmamiError`（带 `code` 与可选 `status`）：
 
 - `UmamiUrlError` — `code: 'INVALID_URL'`，无效分享链接。
-- `UmamiAuthError` — `code: 'AUTH_FAILED'`，401，通常意味着 shareId 失效。
-- `UmamiNetworkError` — `code: 'NETWORK_ERROR'`，上游返回非预期状态码。
+- `UmamiAuthError` — `code: 'AUTH_FAILED'`，401，通常意味着 token 过期或失效。
+- `UmamiNetworkError` — `code: 'NETWORK_ERROR'`，上游返回非预期状态码（如 shareId 不存在返回 404）。
 - `UmamiTimeoutError` — `code: 'TIMEOUT'`，请求超时（默认 10s）。
 
 ### 工具类

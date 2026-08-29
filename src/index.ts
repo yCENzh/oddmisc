@@ -23,10 +23,6 @@ export type {
 export { CacheManager } from './utils/umami/cache';
 export { parseShareUrl } from './utils/umami/url-parser';
 
-// Astro 集成
-export { umami, oddmisc } from './astro';
-export type { UmamiIntegrationOptions, OddmiscIntegrationOptions } from './astro';
-
 // 运行时客户端（用于手动初始化）
 export { initUmamiRuntime } from './runtime/client';
 export type { UmamiRuntimeConfig as RuntimeConfig, StatsResult as RuntimeStatsResult, OddmiscReadyEvent } from './runtime/client';

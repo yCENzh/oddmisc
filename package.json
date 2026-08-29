@@ -1,6 +1,6 @@
 {
   "name": "oddmisc",
-  "version": "1.2.8",
+  "version": "1.2.9",
   "description": "杂七杂八奇怪小工具 npm 包 — Umami 分享链接统计读取与 Astro 集成",
   "homepage": "https://github.com/yCENzh/oddmisc#readme",
   "bugs": {
@@ -53,11 +53,19 @@
     "tools"
   ],
   "devDependencies": {
-    "@types/node": "^26.0.0",
-    "@vitest/coverage-v8": "^4.1.9",
-    "astro": "^6.4.8",
+    "@types/node": "^26.4.0",
+    "@vitest/coverage-v8": "^4.1.11",
+    "astro": "^7.2.9",
     "tsup": "^8.5.1",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.9"
+    "vitest": "^4.1.11"
+  },
+  "peerDependencies": {
+    "astro": ">=4.0.0"
+  },
+  "peerDependenciesMeta": {
+    "astro": {
+      "optional": true
+    }
   }
 }

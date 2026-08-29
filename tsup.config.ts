@@ -8,13 +8,26 @@ const pkg = JSON.parse(readFileSync(join(__dirname, 'package.json'), 'utf-8'))
 
 export default defineConfig([
   {
-    entry: ['src/index.ts', 'src/astro/index.ts'],
+    entry: ['src/index.ts'],
     format: ['cjs', 'esm'],
     dts: true,
     splitting: false,
     sourcemap: true,
     clean: false,
     minify: true,
+    define: {
+      PKG_VERSION: JSON.stringify(pkg.version)
+    }
+  },
+  {
+    entry: ['src/astro/index.ts'],
+    format: ['cjs', 'esm'],
+    dts: true,
+    splitting: false,
+    sourcemap: true,
+    clean: false,
+    minify: true,
+    outDir: 'dist/astro',
     define: {
       PKG_VERSION: JSON.stringify(pkg.version)
     }

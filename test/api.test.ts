@@ -228,7 +228,9 @@ describe('UmamiAPI additional endpoints', () => {
 
     now = 2000;
     const second = await api.getMetrics(BASE, SHARE_ID, 'path');
-    expect(second).toEqual([{ x: '/', y: 10 }]);
+    expect(Array.isArray(second)).toBe(true);
+    expect(second.length).toBe(1);
+    expect(second[0]).toEqual({ x: '/', y: 10 });
     expect((second as Record<string, unknown>)._fromCache).toBe(true);
     expect(fetchMock).toHaveBeenCalledTimes(2); // share + metrics, no extra fetch
   });
