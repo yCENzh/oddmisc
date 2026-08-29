@@ -69,7 +69,7 @@ describe('UmamiAPI.getStats', () => {
     globalThis.fetch = fetchMock as unknown as typeof fetch;
 
     const first = await api.getStats(BASE, SHARE_ID, { path: 'eq./a' });
-    expect(first._fromCache).toBeUndefined();
+    expect(first._fromCache).toBe(false);
 
     now = 2000;
     const second = await api.getStats(BASE, SHARE_ID, { path: 'eq./a' });

@@ -2,54 +2,27 @@
  * 浏览器运行时客户端（IIFE 内联注入，不能有外部 import）。
  */
 
-const DEFAULT_TIMEOUT = 10000;
-const SHARE_CONTEXT_HEADER = 'x-umami-share-context';
-const SHARE_CONTEXT_VALUE = '1';
-const DEFAULT_CACHE_TTL = 3600000;
-const DEFAULT_CACHE_MAX = 100;
-const RANGE_ALIGN_MS = 5 * 60_000;
+import {
+  DEFAULT_TIMEOUT,
+  SHARE_CONTEXT_HEADER,
+  SHARE_CONTEXT_VALUE,
+  DEFAULT_CACHE_TTL,
+  DEFAULT_CACHE_MAX,
+  fetchWithTimeout,
+  extract,
+  parseShareUrl,
+  alignedNow,
+  buildCacheKey,
+  extractPathFromUrl,
+} from './shared';
 
-// --- utils ---
-
-async function fetchWithTimeout(url: string, options?: RequestInit, timeout = DEFAULT_TIMEOUT): Promise<Response> {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), timeout);
-  try {
-    return await fetch(url, { ...options, signal: controller.signal });
-  } catch (err) {
-    if (err instanceof DOMException && err.name === 'AbortError') {
-      throw new Error(`[oddmisc] 请求超时 (${timeout}ms): ${url}`);
-    }
-    throw err;
-  } finally {
-    clearTimeout(timeoutId);
-  }
-}
-
-function extract(field: unknown): number {
-  if (typeof field === 'number') return field;
-  if (field && typeof (field as { value?: unknown }).value === 'number') {
-    return (field as { value: number }).value;
-  }
-  return 0;
-}
-
-function parseShareUrl(shareUrl: string): { apiBase: string; shareId: string } {
-  const url = new URL(shareUrl);
-  const pathParts = url.pathname.split('/');
-  const shareIndex = pathParts.indexOf('share');
-  if (shareIndex === -1 || shareIndex === pathParts.length - 1) {
-    throw new Error('无效的分享 URL：未找到 share 路径');
-  }
-  const shareId = pathParts[shareIndex + 1];
-  if (!shareId) throw new Error('无效的分享 URL：缺少分享 ID');
-  const pathBeforeShare = pathParts.slice(0, shareIndex).join('/');
-  return { apiBase: `${url.protocol}//${url.host}${pathBeforeShare}/api`, shareId };
-}
-
-function alignedNow(): number {
-  return Math.floor(Date.now() / RANGE_ALIGN_MS) * RANGE_ALIGN_MS;
-}
+import type {
+  StatsResult,
+  PageviewsSeries,
+  MetricEntry,
+  WebsiteInfo,
+  DateRange,
+} from '../modules/umami/types';
 
 // --- cache ---
 
@@ -125,55 +98,9 @@ interface UmamiRuntimeConfig {
   timeout?: number;
 }
 
-interface StatsResult {
-  pageviews: number;
-  visitors: number;
-  visits: number;
-  bounces?: number;
-  totaltime?: number;
-  _fromCache?: boolean;
-}
-
 interface ShareData {
   websiteId: string;
   token: string;
-}
-
-interface PageviewPoint {
-  x: string;
-  y: number;
-}
-
-interface PageviewsSeries {
-  pageviews: PageviewPoint[];
-  sessions: PageviewPoint[];
-}
-
-interface MetricEntry {
-  x: string;
-  y: number;
-  _fromCache?: boolean;
-}
-
-interface WebsiteInfo {
-  id: string;
-  name: string;
-  domain: string;
-  shareId: string | null;
-  createdAt: string;
-  updatedAt: string;
-  resetAt: string | null;
-  userId: string;
-  teamId: string | null;
-  createdBy: string;
-  deletedAt: string | null;
-  recorderEnabled: boolean;
-  replayConfig: Record<string, unknown> | null;
-}
-
-interface DateRange {
-  startDate: string | null;
-  endDate: string | null;
 }
 
 // --- client ---
@@ -228,18 +155,17 @@ class UmamiRuntimeClient {
     return (await res.json()) as T;
   }
 
-  private buildCacheKey(prefix: string, params: Record<string, string>): string {
-    const sortedParams = Object.entries(params).sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => `${k}=${v}`).join('&');
-    return `${prefix}-${sortedParams}`;
-  }
-
-  async getStats(path?: string): Promise<StatsResult> {
-    const endAt = alignedNow();
-    const cacheKey = `${path ? `stats-${path}` : 'stats-site'}-${endAt}`;
+  async getStats(path?: string, options?: { startAt?: number; endAt?: number }): Promise<StatsResult> {
+    const endAt = options?.endAt ?? alignedNow();
+    const startAt = options?.startAt ?? 0;
+    const cacheKey = buildCacheKey(path ? `stats-${path}` : 'stats-site', {
+      startAt: startAt.toString(),
+      endAt: endAt.toString(),
+    });
     const cached = this.cache.get(cacheKey) as StatsResult | null;
     if (cached) return { ...cached, _fromCache: true };
 
-    const params = new URLSearchParams({ startAt: '0', endAt: endAt.toString() });
+    const params = new URLSearchParams({ startAt: startAt.toString(), endAt: endAt.toString() });
     if (path) params.set('path', `eq.${path}`);
 
     const data = await this.authedFetch<Record<string, unknown>>(`/stats?${params.toString()}`);
@@ -250,12 +176,28 @@ class UmamiRuntimeClient {
     };
     if (data.bounces !== undefined) result.bounces = extract(data.bounces);
     if (data.totaltime !== undefined) result.totaltime = extract(data.totaltime);
+    if (data.comparison && typeof data.comparison === 'object' && data.comparison !== null) {
+      const comp = data.comparison as Record<string, unknown>;
+      result.comparison = {
+        pageviews: extract(comp.pageviews),
+        visitors: extract(comp.visitors),
+        visits: extract(comp.visits),
+        bounces: comp.bounces !== undefined ? extract(comp.bounces) : undefined,
+        totaltime: comp.totaltime !== undefined ? extract(comp.totaltime) : undefined,
+      };
+    }
     this.cache.set(cacheKey, result);
     return result;
   }
 
-  getSiteStats(): Promise<StatsResult> { return this.getStats(); }
-  getPageStats(path: string): Promise<StatsResult> { return this.getStats(path); }
+  getSiteStats(options?: { startAt?: number; endAt?: number }): Promise<StatsResult> { return this.getStats(undefined, options); }
+  getPageStats(path: string, options?: { startAt?: number; endAt?: number }): Promise<StatsResult> { return this.getStats(path, options); }
+
+  async getPageStatsByUrl(url: string, options?: { startAt?: number; endAt?: number }): Promise<StatsResult> {
+    const path = extractPathFromUrl(url);
+    if (!path) throw new Error('无效的 URL');
+    return this.getStats(path, options);
+  }
 
   async getActiveVisitors(): Promise<number> {
     const data = await this.authedFetch<{ visitors?: number }>('/active');
@@ -270,7 +212,7 @@ class UmamiRuntimeClient {
   }): Promise<PageviewsSeries> {
     const { startAt = 0, endAt = alignedNow(), unit = 'day', timezone = 'UTC' } = params ?? {};
     const cacheParams = { startAt: startAt.toString(), endAt: endAt.toString(), unit, timezone };
-    const cacheKey = this.buildCacheKey('pageviews', cacheParams);
+    const cacheKey = buildCacheKey('pageviews', cacheParams);
 
     const cached = this.cache.get(cacheKey) as PageviewsSeries | null;
     if (cached) return { ...cached, _fromCache: true } as PageviewsSeries & { _fromCache?: boolean };
@@ -306,7 +248,7 @@ class UmamiRuntimeClient {
       endAt: endAt.toString()
     };
     if (typeof limit === 'number') cacheParams.limit = limit.toString();
-    const cacheKey = this.buildCacheKey('metrics', cacheParams);
+    const cacheKey = buildCacheKey('metrics', cacheParams);
 
     const cached = this.cache.get(cacheKey) as MetricEntry[] | null;
     if (cached) {
@@ -367,6 +309,7 @@ function mountEmptyClient(): void {
 
   (window as typeof window & { oddmisc?: Record<string, unknown> }).oddmisc = {
     getStats: zeroStats, getSiteStats: zeroStats, getPageStats: zeroStats,
+    getPageStatsByUrl: zeroStats,
     getActiveVisitors: () => Promise.resolve(0),
     getPageviews: zeroSeries, getMetrics: zeroMetrics,
     getWebsite: zeroWebsite, getDateRange: zeroDateRange,
@@ -383,9 +326,10 @@ export function initUmamiRuntime(config: UmamiRuntimeConfig): void {
       const client = new UmamiRuntimeClient(config);
       (window as typeof window & { oddmisc?: Record<string, unknown> }).oddmisc = {
         umami: client,
-        getStats: (path?: string) => client.getStats(path),
-        getSiteStats: () => client.getSiteStats(),
-        getPageStats: (path: string) => client.getPageStats(path),
+        getStats: (path?: string, options?: { startAt?: number; endAt?: number }) => client.getStats(path, options),
+        getSiteStats: (options?: { startAt?: number; endAt?: number }) => client.getSiteStats(options),
+        getPageStats: (path: string, options?: { startAt?: number; endAt?: number }) => client.getPageStats(path, options),
+        getPageStatsByUrl: (url: string, options?: { startAt?: number; endAt?: number }) => client.getPageStatsByUrl(url, options),
         getActiveVisitors: () => client.getActiveVisitors(),
         getPageviews: (params?: {
           startAt?: number;
@@ -415,22 +359,15 @@ export function initUmamiRuntime(config: UmamiRuntimeConfig): void {
   );
 }
 
-export type {
-  UmamiRuntimeConfig,
-  StatsResult,
-  PageviewsSeries,
-  PageviewPoint,
-  MetricEntry,
-  WebsiteInfo,
-  DateRange
-};
+export type { UmamiRuntimeConfig };
 
 interface OddmiscReadyEvent extends CustomEvent {
   detail: {
     client: {
-      getStats: (path?: string) => Promise<StatsResult>;
-      getSiteStats: () => Promise<StatsResult>;
-      getPageStats: (path: string) => Promise<StatsResult>;
+      getStats: (path?: string, options?: { startAt?: number; endAt?: number }) => Promise<StatsResult>;
+      getSiteStats: (options?: { startAt?: number; endAt?: number }) => Promise<StatsResult>;
+      getPageStats: (path: string, options?: { startAt?: number; endAt?: number }) => Promise<StatsResult>;
+      getPageStatsByUrl: (url: string, options?: { startAt?: number; endAt?: number }) => Promise<StatsResult>;
       getActiveVisitors: () => Promise<number>;
       getPageviews: (params?: {
         startAt?: number;

@@ -88,19 +88,21 @@ describe('Astro integration — injectUmamiRuntime path resolution', () => {
     mockReadFileSync.mockReturnValue('// mock runtime code');
 
     const injectScript = vi.fn();
+    const addWatchFile = vi.fn();
     const integration = umami({ shareUrl: 'https://example.com/share/test' });
     const hook: any = (integration as any).hooks['astro:config:setup'];
-    hook({ injectScript });
+    hook({ injectScript, addWatchFile });
 
     expect(injectScript).toHaveBeenCalledTimes(1);
     expect(injectScript).toHaveBeenCalledWith(
-      'page',
+      'head-inline',
       expect.stringContaining('// mock runtime code')
     );
     expect(injectScript).toHaveBeenCalledWith(
-      'page',
+      'head-inline',
       expect.stringContaining('initUmamiRuntime')
     );
+    expect(addWatchFile).toHaveBeenCalled();
   });
 
   it('skips injection when shareUrl is false', () => {
@@ -119,15 +121,17 @@ describe('Astro integration — injectUmamiRuntime path resolution', () => {
     mockReadFileSync.mockReturnValue('// code');
 
     const injectScript = vi.fn();
+    const addWatchFile = vi.fn();
     const integration = oddmisc({ umami: { shareUrl: 'https://example.com/share/test' } });
     const hook: any = (integration as any).hooks['astro:config:setup'];
-    hook({ injectScript });
+    hook({ injectScript, addWatchFile });
 
     expect(injectScript).toHaveBeenCalledTimes(1);
     expect(injectScript).toHaveBeenCalledWith(
-      'page',
+      'head-inline',
       expect.stringContaining('initUmamiRuntime')
     );
+    expect(addWatchFile).toHaveBeenCalled();
   });
 
   it('oddmisc() with umami.shareUrl=false skips injection', () => {

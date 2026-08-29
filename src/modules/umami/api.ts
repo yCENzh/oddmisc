@@ -10,13 +10,10 @@ import type {
 import { CacheManager } from '../../utils/umami/cache';
 import { fetchWithTimeout } from '../../utils/fetch';
 import { UmamiNetworkError, UmamiAuthError } from '../../errors';
+import { buildCacheKey, RANGE_ALIGN_MS } from '../../runtime/shared';
 
-// cloud.umami.is 需要此 header，否则 401
 const SHARE_CONTEXT_HEADER = 'x-umami-share-context';
 const SHARE_CONTEXT_VALUE = '1';
-
-// endAt 默认值按 5 分钟对齐，减少缓存未命中
-const RANGE_ALIGN_MS = 5 * 60_000;
 
 interface StatsAPIParams extends Partial<StatsQueryParams> {
   path?: string;
@@ -62,12 +59,12 @@ export class UmamiAPI {
 
   constructor(private readonly cacheManager: CacheManager) {}
 
-  private shareKey(baseUrl: string, shareId: string): string {
-    return `${baseUrl}|${shareId}`;
+  private shareKey(shareId: string): string {
+    return shareId;
   }
 
   async getShareData(baseUrl: string, shareId: string): Promise<ShareData> {
-    const key = this.shareKey(baseUrl, shareId);
+    const key = this.shareKey(shareId);
     let promise = this.sharePromises.get(key);
     if (!promise) {
       promise = this.fetchShareData(baseUrl, shareId).catch((err) => {
@@ -79,9 +76,9 @@ export class UmamiAPI {
     return promise;
   }
 
-  clearShareCache(baseUrl?: string, shareId?: string): void {
-    if (baseUrl && shareId) {
-      this.sharePromises.delete(this.shareKey(baseUrl, shareId));
+clearShareCache(shareId?: string): void {
+    if (shareId) {
+      this.sharePromises.delete(this.shareKey(shareId));
     } else {
       this.sharePromises.clear();
     }
@@ -106,7 +103,7 @@ export class UmamiAPI {
 
     if (!res.ok) {
       if (res.status === 401) {
-        this.sharePromises.delete(this.shareKey(baseUrl, shareId));
+        this.sharePromises.delete(this.shareKey(shareId));
         throw new UmamiAuthError('认证失败，请检查 shareId', res.status);
       }
       throw new UmamiNetworkError(`请求 ${path} 失败: ${res.status}`, res.status);
@@ -114,17 +111,17 @@ export class UmamiAPI {
     return (await res.json()) as T;
   }
 
-  private async cachedGet<T extends object>(
+  private async cachedGet<T>(
     baseUrl: string,
     shareId: string,
     path: string,
     cacheKey: string
   ): Promise<Cached<T>> {
     const cached = this.cacheManager.get(cacheKey) as T | null;
-    if (cached) return { ...cached, _fromCache: true };
+    if (cached) return { ...cached, _fromCache: true } as Cached<T>;
     const data = await this.authedFetch<T>(baseUrl, shareId, path);
     this.cacheManager.set(cacheKey, data);
-    return data;
+    return { ...data, _fromCache: false } as Cached<T>;
   }
 
   private resolveRange(range: TimeRange = {}): { startAt: number; endAt: number } {
@@ -134,18 +131,53 @@ export class UmamiAPI {
     };
   }
 
+  private buildCacheKeyForStats(baseUrl: string, shareId: string, params: StatsAPIParams): string {
+    const { startAt, endAt } = this.resolveRange(params);
+    return buildCacheKey(`${baseUrl}|${shareId}|stats`, {
+      startAt: startAt.toString(),
+      endAt: endAt.toString(),
+      path: params.path ?? '',
+      url: params.url ?? '',
+      hostname: params.hostname ?? '',
+    });
+  }
+
+  private buildCacheKeyForPageviews(baseUrl: string, shareId: string, params: PageviewsParams): string {
+    const { startAt, endAt } = this.resolveRange(params);
+    return buildCacheKey(`${baseUrl}|${shareId}|pageviews`, {
+      startAt: startAt.toString(),
+      endAt: endAt.toString(),
+      unit: params.unit ?? 'day',
+      timezone: params.timezone ?? 'UTC',
+    });
+  }
+
+  private buildCacheKeyForMetrics(baseUrl: string, shareId: string, type: MetricType, params: MetricsParams): string {
+    const { startAt, endAt } = this.resolveRange(params);
+    return buildCacheKey(`${baseUrl}|${shareId}|metrics`, {
+      startAt: startAt.toString(),
+      endAt: endAt.toString(),
+      type,
+      limit: typeof params.limit === 'number' ? params.limit.toString() : '',
+    });
+  }
+
   async getStats(baseUrl: string, shareId: string, params: StatsAPIParams): Promise<StatsAPIResponse> {
     const { websiteId } = await this.getShareData(baseUrl, shareId);
+    const cacheKey = this.buildCacheKeyForStats(baseUrl, shareId, params);
+
+    const qp = new URLSearchParams({ startAt: '0', endAt: '0' });
     const { startAt, endAt } = this.resolveRange(params);
-    const qp = new URLSearchParams({ startAt: startAt.toString(), endAt: endAt.toString() });
-    const cacheQp = new URLSearchParams({ startAt: startAt.toString(), endAt: endAt.toString() });
-    if (params.path) { qp.set('path', params.path); cacheQp.set('path', params.path); }
-    if (params.url) { qp.set('url', params.url); cacheQp.set('url', params.url); }
-    if (params.hostname) { qp.set('hostname', params.hostname); cacheQp.set('hostname', params.hostname); }
+    qp.set('startAt', startAt.toString());
+    qp.set('endAt', endAt.toString());
+    if (params.path) qp.set('path', params.path);
+    if (params.url) qp.set('url', params.url);
+    if (params.hostname) qp.set('hostname', params.hostname);
+
     return this.cachedGet<StatsAPIResponse>(
       baseUrl, shareId,
       `/websites/${websiteId}/stats?${qp.toString()}`,
-      `${baseUrl}|${shareId}|stats|${cacheQp.toString()}`
+      cacheKey
     );
   }
 
@@ -156,19 +188,21 @@ export class UmamiAPI {
 
   async getWebsite(baseUrl: string, shareId: string): Promise<Cached<WebsiteInfo>> {
     const { websiteId } = await this.getShareData(baseUrl, shareId);
+    const cacheKey = `${baseUrl}|${shareId}|website`;
     return this.cachedGet<WebsiteInfo>(
       baseUrl, shareId,
       `/websites/${websiteId}`,
-      `${baseUrl}|${shareId}|website`
+      cacheKey
     );
   }
 
   async getDateRange(baseUrl: string, shareId: string): Promise<Cached<DateRange>> {
     const { websiteId } = await this.getShareData(baseUrl, shareId);
+    const cacheKey = `${baseUrl}|${shareId}|daterange`;
     return this.cachedGet<DateRange>(
       baseUrl, shareId,
       `/websites/${websiteId}/daterange`,
-      `${baseUrl}|${shareId}|daterange`
+      cacheKey
     );
   }
 
@@ -178,17 +212,19 @@ export class UmamiAPI {
     params: PageviewsParams = {}
   ): Promise<Cached<PageviewsSeries>> {
     const { websiteId } = await this.getShareData(baseUrl, shareId);
+    const cacheKey = this.buildCacheKeyForPageviews(baseUrl, shareId, params);
+
+    const qp = new URLSearchParams({ startAt: '0', endAt: '0' });
     const { startAt, endAt } = this.resolveRange(params);
-    const qp = new URLSearchParams({ startAt: startAt.toString(), endAt: endAt.toString() });
-    const cacheQp = new URLSearchParams({ startAt: startAt.toString(), endAt: endAt.toString() });
+    qp.set('startAt', startAt.toString());
+    qp.set('endAt', endAt.toString());
     qp.set('unit', params.unit ?? 'day');
     qp.set('timezone', params.timezone ?? 'UTC');
-    cacheQp.set('unit', params.unit ?? 'day');
-    cacheQp.set('timezone', params.timezone ?? 'UTC');
+
     return this.cachedGet<PageviewsSeries>(
       baseUrl, shareId,
       `/websites/${websiteId}/pageviews?${qp.toString()}`,
-      `${baseUrl}|${shareId}|pageviews|${cacheQp.toString()}`
+      cacheKey
     );
   }
 
@@ -199,20 +235,20 @@ export class UmamiAPI {
     params: MetricsParams = {}
   ): Promise<Cached<MetricEntry[]>> {
     const { websiteId } = await this.getShareData(baseUrl, shareId);
-    const { startAt, endAt } = this.resolveRange(params);
-    const qp = new URLSearchParams({ startAt: startAt.toString(), endAt: endAt.toString() });
-    const cacheQp = new URLSearchParams({ startAt: startAt.toString(), endAt: endAt.toString() });
-    qp.set('type', type);
-    if (typeof params.limit === 'number') qp.set('limit', params.limit.toString());
-    cacheQp.set('type', type);
-    if (typeof params.limit === 'number') cacheQp.set('limit', params.limit.toString());
-    const cacheKey = `${baseUrl}|${shareId}|metrics|${cacheQp.toString()}`;
+    const cacheKey = this.buildCacheKeyForMetrics(baseUrl, shareId, type, params);
 
     const cached = this.cacheManager.get(cacheKey) as MetricEntry[] | null;
     if (cached) {
       Object.defineProperty(cached, '_fromCache', { value: true, enumerable: true, writable: true });
       return cached;
     }
+
+    const qp = new URLSearchParams({ startAt: '0', endAt: '0' });
+    const { startAt, endAt } = this.resolveRange(params);
+    qp.set('startAt', startAt.toString());
+    qp.set('endAt', endAt.toString());
+    qp.set('type', type);
+    if (typeof params.limit === 'number') qp.set('limit', params.limit.toString());
 
     const data = await this.authedFetch<MetricEntry[]>(
       baseUrl, shareId,

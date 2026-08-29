@@ -92,7 +92,7 @@ export class UmamiClient {
 
   clearCache(): void {
     this.cacheManager.clear();
-    this.api.clearShareCache(this.baseUrl, this.shareId);
+    this.api.clearShareCache(this.shareId);
   }
 }
 

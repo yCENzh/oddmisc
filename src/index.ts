@@ -25,4 +25,4 @@ export { parseShareUrl } from './utils/umami/url-parser';
 
 // 运行时客户端（用于手动初始化）
 export { initUmamiRuntime } from './runtime/client';
-export type { UmamiRuntimeConfig as RuntimeConfig, StatsResult as RuntimeStatsResult, OddmiscReadyEvent } from './runtime/client';
+export type { UmamiRuntimeConfig as RuntimeConfig, OddmiscReadyEvent } from './runtime/client';
