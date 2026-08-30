@@ -12,7 +12,7 @@ export default defineConfig([
     format: ['cjs', 'esm'],
     dts: true,
     splitting: false,
-    sourcemap: true,
+    sourcemap: false,
     clean: false,
     minify: true,
     define: {
@@ -21,10 +21,10 @@ export default defineConfig([
   },
   {
     entry: ['src/astro/index.ts'],
-    format: ['cjs', 'esm'],
+    format: ['esm'],
     dts: true,
     splitting: false,
-    sourcemap: true,
+    sourcemap: false,
     clean: false,
     minify: true,
     outDir: 'dist/astro',

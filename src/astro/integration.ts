@@ -1,6 +1,5 @@
 import { readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
 import type { AstroIntegration, HookParameters } from 'astro';
 
 export interface UmamiIntegrationOptions {
@@ -15,29 +14,21 @@ export interface OddmiscIntegrationOptions {
 
 type AstroConfigSetupParams = HookParameters<'astro:config:setup'>;
 
+let resolvedRuntimePath: string | null = null;
+
 function getRuntimePath(): string {
-  try {
-    // 使用 import.meta.resolve 正确解析包内路径（Vite/Rollup 支持）
-    const resolved = import.meta.resolve('../runtime/client.global.js');
-    return fileURLToPath(resolved);
-  } catch {
-    // 降级：开发环境或打包时相对路径
-    const __dirname = dirname(fileURLToPath(import.meta.url));
-    return join(__dirname, '../runtime/client.global.js');
-  }
+  if (resolvedRuntimePath) return resolvedRuntimePath;
+
+  // Astro/Vite 环境标准方式
+  const resolved = import.meta.resolve('../runtime/client.global.js');
+  resolvedRuntimePath = fileURLToPath(resolved);
+  return resolvedRuntimePath;
 }
 
 function injectUmamiRuntime(shareUrl: string | false): string | undefined {
   if (!shareUrl) return;
 
-  let runtimeCode = '';
-  try {
-    const runtimePath = getRuntimePath();
-    runtimeCode = readFileSync(runtimePath, 'utf-8');
-  } catch {
-    console.warn('[oddmisc] 无法读取运行时文件，已跳过客户端注入');
-    return;
-  }
+  const runtimeCode = readFileSync(getRuntimePath(), 'utf-8');
 
   return `
 // oddmisc Umami Runtime
@@ -64,8 +55,7 @@ export function umami(options: UmamiIntegrationOptions): AstroIntegration {
           injectScript('page', code);
         }
 
-        const runtimePath = getRuntimePath();
-        addWatchFile(runtimePath);
+        addWatchFile(getRuntimePath());
       },
     },
   };
@@ -88,8 +78,7 @@ export function oddmisc(options: OddmiscIntegrationOptions = {}): AstroIntegrati
           injectScript('page', code);
         }
 
-        const runtimePath = getRuntimePath();
-        addWatchFile(runtimePath);
+        addWatchFile(getRuntimePath());
       },
     },
   };

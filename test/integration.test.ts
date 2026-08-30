@@ -53,35 +53,32 @@ describe('Astro integration — injectUmamiRuntime path resolution', () => {
     consoleWarnSpy.mockRestore();
   });
 
-  it('reads runtime file from runtime/client.global.js (not astro/runtime/)', () => {
+  it('resolves runtime path to runtime/client.global.js (not astro/runtime/)', () => {
     let capturedPath = '';
     mockReadFileSync.mockImplementation((path: string) => {
       capturedPath = path;
-      throw new Error('ENOENT');
+      return '// mock';
     });
 
     const injectScript = vi.fn();
+    const addWatchFile = vi.fn();
     const integration = umami({ shareUrl: 'https://example.com/share/test' });
     const hook: any = (integration as any).hooks['astro:config:setup'];
-    hook({ injectScript });
+    hook({ injectScript, addWatchFile });
 
     const normalized = capturedPath.replace(/\\/g, '/');
     expect(normalized).toMatch(/runtime\/client\.global\.js$/);
     expect(normalized).not.toMatch(/astro\/runtime\//);
   });
 
-  it('gracefully skips injection when runtime file is missing', () => {
+  it('throws when runtime file is missing', () => {
     mockReadFileSync.mockImplementation(() => { throw new Error('ENOENT'); });
 
     const injectScript = vi.fn();
     const integration = umami({ shareUrl: 'https://example.com/share/test' });
     const hook: any = (integration as any).hooks['astro:config:setup'];
-    hook({ injectScript });
 
-    expect(injectScript).not.toHaveBeenCalled();
-    expect(consoleWarnSpy).toHaveBeenCalledWith(
-      '[oddmisc] 无法读取运行时文件，已跳过客户端注入'
-    );
+    expect(() => hook({ injectScript })).toThrow('ENOENT');
   });
 
   it('injects runtime code when file is found', () => {
